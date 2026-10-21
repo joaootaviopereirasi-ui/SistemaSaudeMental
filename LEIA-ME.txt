@@ -1,0 +1,18 @@
+PIRAMIDE DE MASLOW - versao para abrir direto no navegador (sem instalar nada)
+
+1. Extraia o ZIP (nao abra de dentro do zip).
+2. Dê dois cliques em index.html para entrar. Após o login, todas as funções abrem o painel principal; o botão “Check-in” leva ao registro diário, às moedas e ao PDF pessoal.
+3. Na primeira visita, o colaborador cria seu acesso com nome, senha, loja, função e setor. Depois entra selecionando loja e função e informando a senha. Na mesma lista há Vendedor, Caixa, RH, Segurança, Gerente, Estoque e Administrador. O acesso administrador usa a senha 9781.
+4. O perfil RH está cadastrado com a senha 9871. Na aba Agenda do painel, o RH pode publicar atividades; os demais colaboradores podem confirmar ou cancelar a própria presença nas atividades futuras.
+5. Para abrir o painel de gestão diretamente, dê dois cliques em painel.html e use a senha de administrador (9781).
+
+O colaborador escolhe sua função entre os cargos de supermercado, registra dores, satisfação, horas dormidas e feedback em check-ins diários.
+Cada colaborador da equipe recebe 10 moedas virtuais por semana quando todos os integrantes cadastrados da equipe completam os sete check-ins diários. O saldo pessoal aparece no topo da tela e pode ser usado na Loja virtual.
+Depois de sete dias, o colaborador pode gerar uma avaliação semanal pessoal com seus check-ins e salvá-la como PDF pela janela de impressão. A geração pode ser feita uma vez a cada sete dias.
+
+Os dados de demonstração ficam salvos no próprio navegador (localStorage). Contas e senhas funcionam apenas nesta demonstração local; para uso real, configure autenticação segura e catálogo de recompensas da empresa. As respostas individuais de saúde são usadas pelo colaborador no PDF pessoal; o painel administrativo mostra resultados agregados.
+Use o MESMO navegador para o app e o painel, para que um enxergue o que o outro fez.
+Para restaurar os dados de demonstração: abra o console (F12) e rode pausaDemoReset()
+Obs.: o QR code do painel precisa de internet; o codigo de 6 letras funciona offline.
+A versao completa com servidor Node.js esta na pasta pausa-mais/ (npm start).
+

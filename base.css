@@ -1,0 +1,37 @@
+:root {
+  --bg: #f5f7f6; --surface: #ffffff; --ink: #14231d; --muted: #566861; --line: #dde5e1;
+  --brand: #0f6b4f; --brand-ink: #ffffff; --brand-soft: #e1f2ea;
+  --accent: #b45309; --focus: #1d4ed8;
+  --verde: #1f7a4d; --verde-bg: #dff3e7; --amarelo: #8a5a00; --amarelo-bg: #fdf0cc; --vermelho: #a12622; --vermelho-bg: #fbe0de;
+  --radius: 12px; --shadow: 0 1px 2px rgba(20,35,29,.06), 0 4px 14px rgba(20,35,29,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1512; --surface: #16201b; --ink: #e8f0ec; --muted: #9db0a7; --line: #2a3832;
+    --brand: #3fb68b; --brand-ink: #06150f; --brand-soft: #173126; --accent: #f0a45a; --focus: #7aa2ff;
+    --verde: #6fd3a0; --verde-bg: #153324; --amarelo: #f1c15a; --amarelo-bg: #3a2f10; --vermelho: #ff9a94; --vermelho-bg: #3d1a18;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1, h2, h3 { margin: 0; line-height: 1.2; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+.muted { color: var(--muted); }
+.small { font-size: .875rem; }
+.btn { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; }
+.btn.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.btn.ghost { background: transparent; }
+.btn[disabled] { opacity: .55; cursor: not-allowed; }
+.tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; background: var(--brand-soft); color: var(--brand); }
+.st { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+.st.verde { background: var(--verde-bg); color: var(--verde); }
+.st.amarelo { background: var(--amarelo-bg); color: var(--amarelo); }
+.st.vermelho { background: var(--vermelho-bg); color: var(--vermelho); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: .9rem; z-index: 50; max-width: 90vw; }
+[hidden] { display: none !important; }
