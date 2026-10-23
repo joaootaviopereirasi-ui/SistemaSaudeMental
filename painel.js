@@ -7,8 +7,8 @@ const ss = {
   set(k, v) { try { sessionStorage.setItem(k, v); } catch { /* ignore */ } },
   del(k) { try { sessionStorage.removeItem(k); } catch { /* ignore */ } }
 };
-const S = { pin: ss.get('pausa_pin') || '', eid: ss.get('pausa_panel_eid') || '', role: ss.get('pausa_panel_role') || '', employee: null, isAdmin: false, meta: null, data: null, contacts: null, activities: [], agendaMonth: '', tab: 'geral', noticeDraft: '' };
-const TABS = [['geral', 'Visão geral'], ['saude', 'Saúde'], ['acoes', 'Ações e participação'], ['barreiras', 'Barreiras'], ['recs', 'Recomendações'], ['liga', 'Liga das seções'], ['sst', 'Contatos SST'], ['agenda', 'Agenda']];
+const S = { pin: ss.get('pausa_pin') || '', eid: ss.get('pausa_panel_eid') || '', role: ss.get('pausa_panel_role') || '', employee: null, isAdmin: false, meta: null, data: null, coinRanking: [], checkinRanking: null, contacts: null, activities: [], agendaMonth: '', tab: 'geral', noticeDraft: '', cartOpen: false };
+const TABS = [['geral', 'Visão geral'], ['saude', 'Saúde'], ['acoes', 'Ações e participação'], ['barreiras', 'Barreiras'], ['recs', 'Recomendações'], ['liga', 'Liga das seções'], ['loja', 'Loja virtual'], ['sst', 'Contatos SST'], ['agenda', 'Agenda']];
 
 async function api(path, body) {
   const opt = { headers: { 'x-pin': S.pin, 'x-eid': S.eid } };
@@ -27,8 +27,9 @@ const stp = (s) => (s ? `<span class="st ${s}">${stLabel[s]}</span>` : '');
 const sevLabel = { alta: 'Prioridade alta', media: 'Prioridade média', baixa: 'Prioridade baixa' };
 const monthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const monthTitle = (key) => new Date(`${key}-01T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-const isRH = () => /\bRH\b|recursos humanos/i.test(S.employee?.job || S.role);
+const isRH = () => hasManagementAccess(S.employee?.job || S.role);
 function moveMonth(delta) { const d = new Date(`${(S.agendaMonth || monthKey())}-01T12:00:00`); d.setMonth(d.getMonth() + delta); S.agendaMonth = monthKey(d); }
+const hasManagementAccess = (job) => /\bRH\b|recursos humanos|gerente/i.test(job || '');
 
 function lineChart(labels, series, { min = 0, max = 100, suffix = '' } = {}) {
   const W = 640, H = 230, pl = 36, pr = 12, pt = 12, pb = 28;
@@ -56,6 +57,15 @@ function lineChart(labels, series, { min = 0, max = 100, suffix = '' } = {}) {
 function hbars(items, { warn = false } = {}) {
   if (!items.length) return '<p class="empty">Sem dados no período.</p>';
   return items.map(i => `<div class="hb ${warn ? 'warn' : ''}"><span>${esc(i.label)}</span><div class="track"><i style="width:${Math.min(100, i.pct)}%"></i></div><b>${i.pct}%</b></div>`).join('');
+}
+
+function shopCart() {
+  try { return JSON.parse(localStorage.getItem('maslow_cart_' + S.eid) || '{}') || {}; } catch { return {}; }
+}
+function saveShopCart(cart) { try { localStorage.setItem('maslow_cart_' + S.eid, JSON.stringify(cart)); } catch {} }
+function coinRankingCard() {
+  const rows = S.coinRanking.map(r => `<tr><td>${r.pos}</td><th scope="row">${esc(r.name)}</th><td>${esc(r.job)}</td><td>${esc(r.sector)}</td><td>${esc(window.__shiftLabel[r.shift] || r.shift)}</td><td class="num">${r.earned}</td><td class="num">${r.redeemed}</td><td class="num"><b><span class="game-coin" aria-hidden="true">✦</span> ${r.coins}</b></td></tr>`).join('');
+  return `<section class="card coin-ranking"><h2 class="t">Colaboradores com mais moedas</h2><p class="sub">Saldo de moedas disponível para resgatar recompensas. Os filtros do painel também se aplicam a este levantamento.</p><div class="tw"><table><thead><tr><th>#</th><th>Colaborador</th><th>Função</th><th>Setor</th><th>Turno</th><th class="num">Recebidas</th><th class="num">Resgatadas</th><th class="num">Saldo</th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty">Nenhum colaborador cadastrado nos filtros escolhidos.</td></tr>'}</tbody></table></div></section>`;
 }
 
 const kpi = (l, v, s = '') => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
@@ -104,7 +114,8 @@ function vSaude(d) {
   const rows = d.itensPorSetor.map(s => s.hidden
     ? `<tr><th scope="row">${esc(s.sector)}</th><td colspan="${window.__items.length + 1}" class="muted">menos de ${d.k} respondentes</td></tr>`
     : `<tr><th scope="row">${esc(s.sector)}</th>${window.__items.map(i => `<td><span class="st ${itemCls(i.key, s.means[i.key])}">${s.means[i.key]}</span></td>`).join('')}<td class="num">${s.n}</td></tr>`).join('');
-  return `
+  const weeklyReport = S.isAdmin ? `<section class="card weekly-report-card"><div><h2 class="t">Avaliação semanal por setor</h2><p class="sub">Gere um PDF com os dados agregados de saúde de todos os setores nos últimos sete dias.</p></div><button class="btn primary" data-weekly-health-pdf>Gerar PDF semanal</button></section>` : '';
+  return `${weeklyReport}
   <section class="card"><h2 class="t">Mapa de calor: setor x turno</h2>
     <p class="sub">Índice de saúde de 0 a 100 (física + mental, autopercepção). Verde 68+, amarelo 58 a 67, vermelho abaixo de 58. Grupos com menos de ${d.k} respostas ficam ocultos para proteger o anonimato.</p>
     <div class="tw"><table class="heat"><thead><tr><th>Setor</th><th>Manhã</th><th>Tarde</th><th>Noite</th></tr></thead><tbody>${heat}</tbody></table></div></section>
@@ -173,6 +184,27 @@ function vLiga(d) {
     <p class="sub" style="margin:10px 0 0">Reconhecimento sugerido: café da manhã para a equipe campeã, troféu itinerante e destaque no mural.</p></section>`;
 }
 
+function vLoja() {
+  const ranking = coinRankingCard();
+  const stats = S.checkinRanking || { month: '', total: 0, sectors: [], employeesBySector: [] };
+  const maxSector = Math.max(1, ...stats.sectors.map(x => x.count));
+  const sectorBars = stats.sectors.map(x => `<div class="response-bar"><span>${esc(x.sector)}</span><div class="response-track"><i style="width:${Math.round(x.count / maxSector * 100)}%"></i></div><b>${x.count}</b></div>`).join('') || '<p class="empty">Ainda não há respostas neste mês.</p>';
+  const maxPerson = Math.max(1, ...stats.employeesBySector.flatMap(x => x.employees.map(e => e.count)));
+  const employeeBars = stats.employeesBySector.map(group => `<section class="response-sector"><h3>${esc(group.sector)}</h3>${group.employees.map((e, index) => `<div class="response-bar person-bar"><span>${index + 1}. ${esc(e.name)}</span><div class="response-track"><i style="width:${Math.round(e.count / maxPerson * 100)}%"></i></div><b>${e.count}</b></div>`).join('')}</section>`).join('') || '<p class="empty">Não há check-ins associados a cadastros de colaboradores neste mês.</p>';
+  const responseCharts = `<section class="response-charts"><div class="card"><h2 class="t">Setores com mais check-ins</h2><p class="sub">Respostas registradas no mês ${esc(stats.month)}. Os filtros do painel se aplicam aos gráficos.</p>${sectorBars}<p class="small muted">Total no período: ${stats.total}</p></div><div class="card"><h2 class="t">Colaboradores que mais responderam por setor</h2><p class="sub">Ranking mensal por quantidade de check-ins; mostra apenas contagens de participação, sem respostas de saúde.</p>${employeeBars}</div></section>`;
+  if (!S.employee) return `${ranking}${responseCharts}<section class="card store-note"><h2 class="t">Loja virtual</h2><p class="sub">Administração pode acompanhar o saldo de moedas dos colaboradores. Para resgatar recompensas, entre com o perfil de funcionário.</p></section>`;
+  const coins = Number(S.employee.coins || 0);
+  const products = S.meta.shopItems || [];
+  const cartState = shopCart();
+  const lines = Object.entries(cartState).map(([id, quantity]) => ({ product: products.find(p => p.id === id), quantity: Math.max(0, Number(quantity) || 0) })).filter(x => x.product && x.quantity > 0);
+  const total = lines.reduce((sum, x) => sum + x.product.cost * x.quantity, 0), count = lines.reduce((sum, x) => sum + x.quantity, 0);
+  const cart = S.cartOpen ? `<section class="card cart-panel"><div class="cart-heading"><div><h2 class="t">Carrinho de compras</h2><p class="sub">Confira a quantidade e o valor total em moedas.</p></div><button class="btn sm" data-cart-toggle>Fechar</button></div>${lines.length ? lines.map(x => `<div class="cart-line"><div><b>${esc(x.product.name)}</b><small>${x.quantity} × ${x.product.cost} moedas</small></div><div class="cart-controls"><button class="btn sm" data-cart-change="${esc(x.product.id)}" data-delta="-1">−</button><b>${x.quantity}</b><button class="btn sm" data-cart-change="${esc(x.product.id)}" data-delta="1">+</button></div><b><span class="game-coin" aria-hidden="true">✦</span> ${x.product.cost * x.quantity}</b></div>`).join('') : '<p class="muted">Seu carrinho está vazio.</p>'}<div class="cart-total"><span>Total</span><b><span class="game-coin" aria-hidden="true">✦</span> ${total} moedas</b></div><p class="small muted">Seu saldo: ${coins} moedas${total > coins ? ` · faltam ${total - coins}` : ''}</p><div class="row"><button class="btn" data-cart-clear ${lines.length ? '' : 'disabled'}>Esvaziar</button><button class="btn primary" data-cart-checkout ${!lines.length || total > coins ? 'disabled' : ''}>Finalizar resgate</button></div></section>` : '';
+  return `${ranking}${responseCharts}<section class="card store-intro"><span class="eyebrow">RECONHECIMENTO</span><h2 class="t">Loja virtual</h2><p class="sub">Escolha recompensas e confira o custo antes de concluir o resgate.</p><div class="store-balance"><span>Seu saldo</span><b><span class="game-coin" aria-hidden="true">✦</span> ${coins} moedas</b></div></section>
+    <div class="store-toolbar"><span>Recompensas disponíveis</span><button class="btn primary" data-cart-toggle>🛒 Carrinho <span class="cart-badge">${count}</span></button></div>${cart}
+    <div class="store-grid">${products.map(p => `<article class="card store-item"><span class="store-icon">${esc(p.icon)}</span><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p><div class="store-buy"><b><span class="game-coin" aria-hidden="true">✦</span> ${p.cost} moedas</b><button class="btn sm primary" data-cart-add="${esc(p.id)}">Adicionar ao carrinho</button></div></article>`).join('') || '<section class="card empty">Nenhum item disponível no momento.</section>'}</div>
+    <p class="small muted" style="margin:14px 2px">Catálogo demonstrativo; resgates físicos e cupons dependem da validação da administração.</p>`;
+}
+
 function vSST() {
   if (!S.isAdmin) return '<section class="card" style="margin-top:12px"><h2 class="t">Contatos SST</h2><p class="sub">Esta área mostra pedidos de contato com dados pessoais e fica disponível apenas para a administração.</p></section>';
   const items = S.contacts || [];
@@ -208,7 +240,7 @@ function vAgenda() {
 function render() {
   const d = S.data;
   if (!d) return;
-  const views = { geral: vGeral, saude: vSaude, acoes: vAcoes, barreiras: vBarreiras, recs: vRecs, liga: vLiga, sst: vSST, agenda: vAgenda };
+  const views = { geral: vGeral, saude: vSaude, acoes: vAcoes, barreiras: vBarreiras, recs: vRecs, liga: vLiga, loja: vLoja, sst: vSST, agenda: vAgenda };
   $('#view').innerHTML = views[S.tab](d);
   $('#nav').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${l}</button>`).join('');
   $('#anon').textContent = `Dados agregados. Grupos com menos de ${d.k} pessoas não são exibidos. Dados fictícios de demonstração.`;
@@ -218,6 +250,9 @@ async function refresh() {
   const q = new URLSearchParams({ store: $('#fStore').value, sector: $('#fSector').value, shift: $('#fShift').value, days: $('#fDays').value });
   try {
     S.data = await api('/api/admin/dashboard?' + q);
+    S.coinRanking = (await api('/api/admin/coin-ranking?' + q)).rows;
+    const month = monthKey();
+    S.checkinRanking = await api('/api/admin/checkin-ranking?' + q + '&month=' + month);
     if (S.tab === 'sst' && S.isAdmin) S.contacts = (await api('/api/admin/contacts')).items;
     if (S.tab === 'agenda') S.activities = (await api('/api/rh/activities?eid=' + encodeURIComponent(S.eid))).activities;
     render();
@@ -234,11 +269,11 @@ function setupFilters() {
 }
 
 function logout() {
-  ss.del('pausa_pin'); S.pin = '';
-  if (!S.isAdmin) {
+  if (!S.pin) {
     ss.del('pausa_panel_eid'); ss.del('pausa_panel_role'); ss.del('pausa_eid');
     location.href = 'index.html'; return;
   }
+  ss.del('pausa_pin'); S.pin = '';
   ss.del('pausa_panel_eid'); ss.del('pausa_panel_role');
   S.isAdmin = false; $('#shell').hidden = true; $('#login').hidden = false;
 }
@@ -252,11 +287,14 @@ async function start() {
     catch { ss.del('pausa_pin'); S.pin = ''; }
   }
   if (!authorized && S.eid) {
-    try { S.employee = (await api('/api/me?eid=' + encodeURIComponent(S.eid))).employee; S.role = S.employee.job; authorized = true; }
+    try { const me = await api('/api/me?eid=' + encodeURIComponent(S.eid)); S.employee = { ...me.employee, coins: me.coins }; S.role = S.employee.job; authorized = true; }
     catch { ss.del('pausa_panel_eid'); ss.del('pausa_panel_role'); S.eid = ''; }
   }
   if (!authorized) { $('#login').hidden = false; return; }
-  $('#employeeSpace').hidden = S.isAdmin;
+  if (!S.pin && S.employee && !hasManagementAccess(S.employee.job)) { location.replace('index.html?space=1'); return; }
+  S.isAdmin = !!S.pin || hasManagementAccess(S.employee?.job);
+  $('#employeeWallet').hidden = !!S.pin;
+  if (!S.pin && S.employee) $('#employeeWallet').innerHTML = `<span class="game-coin" aria-hidden="true">✦</span> ${S.employee.coins || 0} moedas`;
   $('#login').hidden = true; $('#shell').hidden = false;
   await refresh();
 }
@@ -304,6 +342,11 @@ $('#loginForm').addEventListener('submit', async (e) => {
   catch { $('#loginErr').textContent = 'PIN inválido.'; }
 });
 $('#logout').addEventListener('click', logout);
+$('#backLogin').addEventListener('click', () => {
+  ss.del('pausa_pin'); ss.del('pausa_panel_eid'); ss.del('pausa_panel_role');
+  try { localStorage.removeItem('pausa_eid'); } catch {}
+  location.href = 'index.html';
+});
 ['fStore', 'fSector', 'fShift', 'fDays'].forEach(id => $('#' + id).addEventListener('change', refresh));
 
 document.addEventListener('click', async (e) => {
@@ -313,6 +356,56 @@ document.addEventListener('click', async (e) => {
     if (S.tab === 'sst' && S.isAdmin) S.contacts = (await api('/api/admin/contacts')).items;
     if (S.tab === 'agenda') S.activities = (await api('/api/rh/activities?eid=' + encodeURIComponent(S.eid))).activities;
     render(); window.scrollTo(0, 0); return;
+  }
+  if (e.target.closest('[data-weekly-health-pdf]')) {
+    if (!S.isAdmin) return;
+    const w = window.open('', '_blank');
+    if (!w) return alert('Permita a abertura de janelas para gerar o PDF.');
+    try {
+      const report = await api('/api/admin/dashboard?days=7');
+      const items = S.meta.items || [];
+      const headings = items.map(i => `<th>${esc(i.short)}</th>`).join('');
+      const rows = report.itensPorSetor.map(s => s.hidden
+        ? `<tr><th>${esc(s.sector)}</th><td colspan="${items.length + 5}">Dados protegidos: menos de ${report.k} respondentes</td></tr>`
+        : `<tr><th>${esc(s.sector)}</th><td>${s.n}</td><td>${s.sleepHours == null ? '—' : `${s.sleepHours} h`}</td><td>${s.geral ?? '—'}</td><td>${s.fisica ?? '—'}</td><td>${s.mental ?? '—'}</td>${items.map(i => `<td>${s.means[i.key] ?? '—'}</td>`).join('')}</tr>`).join('');
+      const end = new Date(report.generatedAt), start = new Date(end.getTime() - 6 * 86400000);
+      w.document.write(`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Avaliação semanal de saúde por setor</title><style>body{font:14px Arial,sans-serif;color:#20352b;margin:30px}h1{color:#15583f;font-size:25px;margin:0 0 8px}.muted{color:#586b61;font-size:12px}table{width:100%;border-collapse:collapse;margin-top:22px;font-size:11px}th,td{padding:9px 6px;border-bottom:1px solid #d8e1dc;text-align:center}th:first-child,td:first-child{text-align:left}thead{background:#edf4f0}thead th{font-size:10px;line-height:1.25}.note{margin-top:18px;color:#586b61;font-size:11px}.print-action{display:inline-flex;align-items:center;gap:10px;margin-top:18px;padding:13px 21px;border:1px solid #0f6b4f;border-radius:10px;background:linear-gradient(135deg,#16815f,#0f6b4f);color:#fff;font-size:14px;font-weight:700;box-shadow:0 5px 14px rgba(15,107,79,.2);cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s}.print-action:hover{background:linear-gradient(135deg,#116f51,#0b5b42);box-shadow:0 8px 18px rgba(15,107,79,.26);transform:translateY(-1px)}.print-action:active{transform:translateY(0);box-shadow:0 3px 8px rgba(15,107,79,.2)}.print-icon{font-size:18px;line-height:1}@page{size:landscape;margin:12mm}@media print{button{display:none}}</style><h1>Avaliação semanal de saúde por setor</h1><p class="muted">Período: ${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')} · Gerado em ${end.toLocaleString('pt-BR')}</p><p class="muted">Resultados agregados dos check-ins diários. As respostas de setores com menos de ${report.k} respondentes são ocultadas para preservar o anonimato.</p><table><thead><tr><th>Setor</th><th>Respondentes</th><th>Sono médio</th><th>Índice geral</th><th>Físico</th><th>Mental</th>${headings}</tr></thead><tbody>${rows || `<tr><td colspan="${items.length + 6}">Sem respostas no período.</td></tr>`}</tbody></table><p class="note">Escala das perguntas: 1 a 5. Índices de saúde: 0 a 100. Horas de sono são a média informada nos check-ins. Este levantamento é informativo e não substitui avaliação clínica.</p><button class="print-action" onclick="window.print()"><span class="print-icon" aria-hidden="true">▤</span>Imprimir / Salvar como PDF</button><script>window.onload=()=>window.print()<\/script></html>`);
+      w.document.close();
+    } catch (err) { w.close(); alert(err.message || 'Não foi possível gerar o levantamento semanal.'); }
+    return;
+  }
+  const cartToggle = e.target.closest('[data-cart-toggle]');
+  if (cartToggle) { S.cartOpen = !S.cartOpen; render(); return; }
+  const cartAdd = e.target.closest('[data-cart-add]');
+  if (cartAdd) {
+    const cart = shopCart(); cart[cartAdd.dataset.cartAdd] = Math.min(20, (Number(cart[cartAdd.dataset.cartAdd]) || 0) + 1); saveShopCart(cart); S.cartOpen = true; render(); return;
+  }
+  const cartChange = e.target.closest('[data-cart-change]');
+  if (cartChange) {
+    const cart = shopCart(), key = cartChange.dataset.cartChange, quantity = (Number(cart[key]) || 0) + Number(cartChange.dataset.delta);
+    if (quantity <= 0) delete cart[key]; else cart[key] = Math.min(20, quantity);
+    saveShopCart(cart); render(); return;
+  }
+  if (e.target.closest('[data-cart-clear]')) { saveShopCart({}); render(); return; }
+  if (e.target.closest('[data-cart-checkout]')) {
+    const items = Object.entries(shopCart()).map(([productId, quantity]) => ({ productId, quantity: Number(quantity) })).filter(x => x.quantity > 0);
+    try {
+      const result = await api('/api/shop/checkout', { eid: S.eid, items });
+      saveShopCart({}); S.cartOpen = false; alert(`Resgate concluído: ${result.total} moedas. Saldo: ${result.coins} moedas.`); await refresh();
+    } catch (err) { alert(err.message); }
+    return;
+  }
+  const shopBuy = e.target.closest('[data-shop-buy]');
+  if (shopBuy) {
+    if (!S.eid || !S.employee) return alert('Entre com o acesso de colaborador para usar a loja virtual.');
+    try {
+      const result = await api('/api/shop/buy', { eid: S.eid, productId: shopBuy.dataset.shopBuy });
+      S.employee.coins = result.coins;
+      $('#employeeWallet').innerHTML = `<span class="game-coin" aria-hidden="true">✦</span> ${result.coins} moedas`;
+      alert(`Resgate registrado: ${result.product}. Saldo: ${result.coins} moedas.`);
+      render();
+    } catch (err) { alert(err.message); }
+    return;
   }
   const month = e.target.closest('[data-agenda-month]');
   if (month) { moveMonth(Number(month.dataset.agendaMonth)); render(); return; }

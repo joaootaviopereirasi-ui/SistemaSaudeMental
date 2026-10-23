@@ -16,6 +16,7 @@
     <label class="f"><span>PIN de acesso</span><input id="pin" type="password" inputmode="numeric" autocomplete="off" required></label>
     <p id="loginErr" class="small" style="color:var(--vermelho)" role="alert"></p>
     <button class="btn primary" style="width:100%">Entrar</button>
+    <a class="btn back-to-access" href="index.html">← Voltar à tela de login</a>
     <p class="small muted" style="margin-bottom:0">Acesso administrador: senha definida pelo responsável.</p>
   </form>
 </div>
@@ -24,7 +25,8 @@
   <header class="bar">
     <div class="brand"><img class="panel-brand-logo" src="assets/piramide-maslow-logo.png" alt="Pirâmide de Maslow"></div>
     <nav id="nav" aria-label="Seções do painel"></nav>
-    <a class="btn checkin-link employee-space" id="employeeSpace" href="index.html?space=1" hidden>Check-in</a>
+    <span class="employee-wallet" id="employeeWallet" hidden aria-label="Saldo de moedas"></span>
+    <button class="btn ghost" id="backLogin" type="button">← Voltar</button>
     <button class="btn ghost" id="logout">Sair</button>
   </header>
   <main>

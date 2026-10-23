@@ -6,6 +6,7 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; }
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .login form { width: min(380px, 100%); }
 .login h1 { font-size: 1.4rem; margin-bottom: 6px; }
+.back-to-access { display: flex; justify-content: center; margin-top: 10px; text-decoration: none; }
 .f { display: block; margin: 14px 0 8px; }
 .f span { display: block; font-weight: 600; margin-bottom: 6px; }
 input[type=password], input[type=text], input[type=number], input[type=datetime-local], select, textarea { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; background: var(--surface); }
@@ -17,8 +18,10 @@ textarea { padding: 10px; min-height: 80px; }
 #nav { display: flex; gap: 2px; flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
 #nav button { flex: 0 0 auto; white-space: nowrap; border: 0; background: none; padding: 8px 9px; border-radius: 8px; font-size: .88rem; font-weight: 600; color: var(--muted); min-height: 40px; }
 #nav button[aria-current="page"] { background: var(--brand-soft); color: var(--brand); }
-.checkin-link { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; padding: 8px 13px; min-height: 38px; border: 1px solid #c9e4d8; border-radius: 7px; background: #edf7f1; color: #216b4d; text-decoration: none; font-size: .88rem; font-weight: 650; white-space: nowrap; }
-.checkin-link:hover { background: #e1f1e8; border-color: #a9d4bf; }
+.employee-wallet { flex: 0 0 auto; padding: 4px 0; border: 0; border-radius: 0; background: transparent; color: #77551f; font-size: .88rem; font-weight: 750; white-space: nowrap; }
+.weekly-report-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 12px; border-left: 4px solid var(--brand); }
+.weekly-report-card h2 { margin: 0; }
+.weekly-report-card .sub { margin: 5px 0 0; }
 main { max-width: 1180px; margin: 0 auto; padding: 16px 20px 48px; }
 .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
 .filters label { font-size: .8rem; font-weight: 600; color: var(--muted); flex: 1; min-width: 130px; }
@@ -86,6 +89,43 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 .agenda-date { display: grid; gap: 4px; color: var(--brand); font-size: .86rem; }
 .agenda-date span { color: var(--muted); font-size: .78rem; }
 .btn.confirmed { background: var(--brand-soft); color: var(--brand); border-color: var(--brand-soft); }
-.employee-space { text-decoration: none; }
+.store-intro { margin-top: 12px; }
+.store-intro h2 { margin: 4px 0; }
+.store-balance { display: grid; gap: 3px; margin-top: 14px; padding: 10px 0; border: 0; border-radius: 0; background: transparent; color: #77551f; }
+.store-balance b { font-size: 1.15rem; }
+.store-balance small { color: #766a55; }
+.game-coin { display: inline-grid; width: 1.35em; height: 1.35em; place-items: center; vertical-align: -.2em; margin-right: .2em; border-radius: 50%; background: radial-gradient(circle at 30% 24%, #fff8cf 0 8%, #f9dd76 9% 25%, #e9b93f 47%, #c78a24 76%, #8e5d15 100%); color: #9a6818; box-shadow: inset 0 0 0 1.5px #b77a1f, inset 0 0 0 3px rgba(255,242,166,.9), inset 0 -2px 3px rgba(113,72,11,.25), 0 2px 3px rgba(80,55,10,.28); font: 800 .68em/1 system-ui,sans-serif; text-shadow: 0 1px rgba(255,255,255,.75); }
+.store-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; }
+.store-item { display: flex; flex-direction: column; min-height: 175px; }
+.store-icon { font-size: 1.8rem; }
+.store-item h3 { margin: 8px 0 3px; }
+.store-item p { margin: 0; color: var(--muted); font-size: .9rem; }
+.store-buy { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 14px; color: #77551f; }
+.coin-ranking { margin: 12px 0; }
+.coin-ranking td:last-child { color: #77551f; white-space: nowrap; }
+.store-toolbar, .cart-heading, .cart-line, .cart-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.store-toolbar { margin: 14px 0 8px; font-weight: 700; }
+.cart-badge { display: inline-grid; min-width: 22px; height: 22px; place-items: center; padding: 0 5px; margin-left: 4px; border-radius: 99px; background: rgba(255,255,255,.2); }
+.cart-panel { margin: 8px 0 14px; padding: 16px; border-color: #d7e5dc; }
+.cart-heading { align-items: flex-start; margin-bottom: 8px; }
+.cart-heading h2 { margin: 0; }
+.cart-line { padding: 10px 0; border-top: 1px solid var(--line); }
+.cart-line > div:first-child { display: grid; gap: 3px; flex: 1; }
+.cart-line small { color: var(--muted); }
+.cart-controls { display: flex; align-items: center; gap: 8px; }
+.cart-total { margin-top: 10px; padding-top: 12px; border-top: 2px solid var(--line); font-weight: 750; }
+.cart-panel .row { justify-content: flex-end; }
+.response-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin: 12px 0; }
+.response-bar { display: grid; grid-template-columns: minmax(100px, 34%) 1fr 42px; align-items: center; gap: 9px; margin: 10px 0; font-size: .86rem; }
+.response-bar > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.response-bar > b { text-align: right; font-variant-numeric: tabular-nums; }
+.response-track { height: 12px; overflow: hidden; border-radius: 99px; background: var(--line); }
+.response-track i { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
+.response-sector { padding: 8px 0; border-top: 1px solid var(--line); }
+.response-sector:first-of-type { border-top: 0; }
+.response-sector h3 { margin: 5px 0 2px; font-size: .95rem; }
+.person-bar { grid-template-columns: minmax(110px, 42%) 1fr 34px; }
+.store-note { margin-top: 12px; }
+.eyebrow { color: #62746c; font-size: .72rem; font-weight: 750; letter-spacing: .12em; }
 @media (max-width: 1050px) { .bar { flex-wrap: wrap; gap: 4px 8px; } #nav { order: 3; flex: 1 0 100%; } }
-@media (max-width: 700px) { main { padding: 12px; } .bar { padding: 8px 12px; } #nav button { padding: 8px; } }
+@media (max-width: 700px) { main { padding: 12px; } .bar { padding: 8px 12px; } #nav button { padding: 8px; } .weekly-report-card { align-items: stretch; flex-direction: column; } }

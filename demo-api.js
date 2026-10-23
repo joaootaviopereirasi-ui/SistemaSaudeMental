@@ -22,7 +22,7 @@ srcs['constants']=function(module,exports,require){
 
 module.exports = {
   K_MIN: 5, // minimo de respondentes para exibir um grupo (anonimato)
-  STORES: ['Loja Centro', 'Loja Norte', 'Loja Sul'],
+  STORES: ['Supermercado Maslow'],
   SECTORS: ['Caixa', 'Reposição', 'Estoque', 'Padaria', 'Açougue', 'Atendimento', 'Limpeza', 'Logística', 'Administrativo'],
   JOBS: [
     'Operador(a) de caixa', 'Fiscal de caixa', 'Empacotador(a)', 'Repositor(a)', 'Promotor(a) de vendas',
@@ -123,23 +123,25 @@ function statusOf(g) {
 // Estatisticas de um conjunto de check-ins. n = respondentes distintos.
 function groupStats(rows) {
   const n = new Set(rows.map(r => r.h)).size;
-  if (!rows.length) return { n: 0, responses: 0, means: {}, fisica: null, mental: null, geral: null, status: null };
+  if (!rows.length) return { n: 0, responses: 0, means: {}, fisica: null, mental: null, geral: null, sleepHours: null, status: null };
   const means = {};
   C.ITEMS.forEach(i => { means[i.key] = mean(rows.map(r => r.answers[i.key])); });
   const grp = g => mean(C.ITEMS.filter(i => i.group === g).map(i => itemScore(i.key, means[i.key])));
   const geral = mean(C.ITEMS.map(i => itemScore(i.key, means[i.key])));
-  return { n, responses: rows.length, means, fisica: grp('fisica'), mental: grp('mental'), geral, status: statusOf(geral) };
+  const sleepRows = rows.filter(r => r.sleepHours != null && Number.isFinite(Number(r.sleepHours)));
+  const sleepHours = mean(sleepRows.map(r => Number(r.sleepHours)));
+  return { n, responses: rows.length, means, fisica: grp('fisica'), mental: grp('mental'), geral, sleepHours, status: statusOf(geral) };
 }
 
 const publicStats = s => {
   if (s.n < K) return { n: s.n, hidden: true };
   const means = {};
   Object.keys(s.means).forEach(k => { means[k] = r1(s.means[k]); });
-  return { n: s.n, hidden: false, means, fisica: r0(s.fisica), mental: r0(s.mental), geral: r0(s.geral), status: s.status };
+  return { n: s.n, hidden: false, means, fisica: r0(s.fisica), mental: r0(s.mental), geral: r0(s.geral), sleepHours: r1(s.sleepHours), status: s.status };
 };
 
 const matchEmp = (e, f) =>
-  (!f.store || e.store === f.store) && (!f.sector || e.sector === f.sector) && (!f.shift || e.shift === f.shift);
+  !e.isSystemRole && !e.isSystemRH && (!f.store || e.store === f.store) && (!f.sector || e.sector === f.sector) && (!f.shift || e.shift === f.shift);
 
 function targets(action, e) {
   return (
@@ -439,7 +441,7 @@ function dashboard(db, f, now) {
 function league(db, store, now) {
   const d = new Date(now);
   const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-  const emps = db.employees.filter(e => !store || e.store === store);
+  const emps = db.employees.filter(e => !e.isSystemRole && !e.isSystemRH && (!store || e.store === store));
   const attBy = new Set(db.attendances.filter(a => a.ts >= monthStart).map(a => a.eid));
   const chk = new Set(db.checkins.filter(c => c.ts >= monthStart).map(c => c.h));
   // Index daily responses once. Re-scanning every check-in for every employee/week
@@ -704,12 +706,19 @@ const C=req('./lib/constants'),A=req('./lib/analytics'),{buildSeed}=req('./seed'
 const PIN='9781',STRICT_CHECKIN=false;
 const KEY='pausa_demo_db_v1';
 const SHOP_ITEMS = [
-  { id: 'cafe', icon: '☕', name: 'Vale café', description: 'Um café ou bebida quente no intervalo.', cost: 10 },
-  { id: 'lanche', icon: '🥪', name: 'Vale lanche', description: 'Um lanche para aproveitar na pausa.', cost: 25 },
-  { id: 'garrafa', icon: '🥤', name: 'Garrafa reutilizável', description: 'Uma garrafa para acompanhar seu turno.', cost: 50 },
-  { id: 'kit', icon: '🎁', name: 'Kit de reconhecimento', description: 'Um pequeno presente da equipe.', cost: 80 }
+  { id: 'lanche', icon: '🥪', name: 'Vale-lanche', description: 'Crédito para um lanche durante o turno.', cost: 30 },
+  { id: 'arroz', icon: '🍚', name: 'Pacote de arroz', description: 'Recompensa de mercearia: pacote de arroz.', cost: 70 },
+  { id: 'feijao', icon: '🫘', name: 'Pacote de feijão', description: 'Recompensa de mercearia: pacote de feijão.', cost: 55 },
+  { id: 'cafe', icon: '☕', name: 'Vale café', description: 'Uma bebida quente no intervalo.', cost: 15 },
+  { id: 'desconto5', icon: '🏷️', name: 'Desconto de 5%', description: 'Cupom para usar em compras no supermercado.', cost: 80 },
+  { id: 'desconto10', icon: '💸', name: 'Desconto de 10%', description: 'Cupom maior para usar em compras no supermercado.', cost: 150 },
+  { id: 'garrafa', icon: '🥤', name: 'Garrafa reutilizável', description: 'Uma garrafa para acompanhar seu turno.', cost: 100 },
+  { id: 'kit', icon: '🎁', name: 'Cesta de mercearia', description: 'Uma seleção de produtos básicos do supermercado.', cost: 220 }
 ];
 const ROLES = ['Vendedor', 'Caixa', 'RH', 'Segurança', 'Gerente', 'Estoque'];
+const ROLE_PASSWORDS = { Vendedor: '9817', Caixa: '9187', RH: '9871', Segurança: '2222', Gerente: '0000', Estoque: '3333' };
+const SYSTEM_ROLE_PASSWORDS = { Gerente: ROLE_PASSWORDS.Gerente };
+const DEVICE_REGISTRATION_ROLES = ['Caixa', 'Vendedor', 'Segurança', 'Estoque'];
 function roleOfJob(job) {
   const j = String(job || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (ROLES.some(r => r.toLowerCase() === j)) return ROLES.find(r => r.toLowerCase() === j);
@@ -720,11 +729,17 @@ function roleOfJob(job) {
   if (/estoque|deposito|conferente|separador|empilhadeira/.test(j)) return 'Estoque';
   return 'Vendedor';
 }
+const hasManagementRole = (job) => ['RH', 'Gerente'].includes(roleOfJob(job));
 let db;
 try{const raw=localStorage.getItem(KEY);db=raw?JSON.parse(raw):null;}catch(e){db=null;}
 if(!db){db=buildSeed();try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){}}
 db.shopPurchases ||= [];
 db.rhActivities ||= [];
+for (const collection of [db.employees, db.checkins, db.votes, db.barrierAnswers, db.contacts, db.actions]) {
+  for (const record of collection || []) {
+    if (record.store && !C.STORES.includes(record.store)) record.store = C.STORES[0];
+  }
+}
 for (const emp of db.employees || []) {
   if (db.meta?.seeded && String(emp.id).length === 12) emp.seeded = true;
   else if (!emp.job) emp.job = 'Outro cargo';
@@ -740,6 +755,22 @@ if (!db.employees.some(e => e.isSystemRH)) {
   db.employees.push({ id: 'e-rh-system', name: 'Recursos Humanos', job: 'RH', store: C.STORES[0], sector: 'Administrativo', shift: 'manha', passwordHash: A.hashId('9871', 'maslow-account-v1'), seeded: true, isSystemRH: true, createdAt: Date.now() });
   save();
 }
+const canonicalRoleIds = new Set(Object.keys(SYSTEM_ROLE_PASSWORDS).map(role => `e-role-${role.toLowerCase()}-0`));
+db.employees = db.employees.filter(e => !e.isSystemRole || canonicalRoleIds.has(e.id));
+for (const [role, password] of Object.entries(SYSTEM_ROLE_PASSWORDS)) {
+  C.STORES.forEach((store, index) => {
+    const id = `e-role-${role.toLowerCase()}-${index}`;
+    let account = db.employees.find(e => e.id === id);
+    if (!account) {
+      const sector = role === 'Caixa' ? 'Caixa' : role === 'Vendedor' ? 'Atendimento' : 'Administrativo';
+      account = { id, name: `Acesso ${role}`, job: role, store, sector, shift: 'manha', seeded: true, isSystemRole: true, createdAt: Date.now() };
+      db.employees.push(account);
+    }
+    account.store = store;
+    account.passwordHash = A.hashId(password, 'maslow-account-v1');
+  });
+}
+save();
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 const bad = (msg) => new HttpError(400, msg);
 
@@ -751,13 +782,20 @@ function getEmp(eid) {
   return e;
 }
 const upsert = (arr, pred, make) => { const i = arr.findIndex(pred); const v = make(i >= 0 ? arr[i] : null); if (i >= 0) arr[i] = v; else arr.push(v); return v; };
-const requireAdmin = (req) => { if (req.headers['x-pin'] !== PIN) throw new HttpError(401, 'PIN invalido'); };
+const requestEmployee = (req) => req.headers['x-eid'] ? getEmp(req.headers['x-eid']) : null;
+const requireAdmin = (req) => {
+  if (req.headers['x-pin'] === PIN) return null;
+  const employee = requestEmployee(req);
+  if (employee && hasManagementRole(employee.job)) return employee;
+  throw new HttpError(403, 'Acesso restrito ao RH, à gerência e à administração.');
+};
 
 const requireDashboardAccess = (req) => {
   if (req.headers['x-pin'] === PIN) return null;
-  const eid = req.headers['x-eid'];
-  if (!eid) throw new HttpError(401, 'Faça login para abrir o painel.');
-  return getEmp(eid);
+  const employee = requestEmployee(req);
+  if (!employee) throw new HttpError(401, 'Faça login para abrir o painel.');
+  if (!hasManagementRole(employee.job)) throw new HttpError(403, 'Seu perfil acessa o check-in pessoal, sem os levantamentos do RH.');
+  return employee;
 };
 
 function actionView(a, emp) {
@@ -784,8 +822,23 @@ route('POST', '/api/employee/login', (req, res, q, body) => {
   const store = String(body.store || '');
   const role = String(body.role || '');
   const password = String(body.password || '');
+  const deviceId = String(body.deviceId || '');
   if (!C.STORES.includes(store) || !ROLES.includes(role) || !password) throw new HttpError(401, 'Informe loja, função e senha.');
-  let matches = db.employees.filter(x => !x.isSystemRH && x.store === store && roleOfJob(x.job) === role && x.passwordHash === A.hashId(password, 'maslow-account-v1'));
+  if (DEVICE_REGISTRATION_ROLES.includes(role) && password === ROLE_PASSWORDS[role]) {
+    if (!deviceId) throw bad('Não foi possível identificar este dispositivo. Atualize a página e tente novamente.');
+    const account = db.employees.find(x => !x.isSystemRH && !x.isSystemRole && x.deviceId === deviceId && roleOfJob(x.job) === role);
+    if (!account) {
+      const sector = role === 'Caixa' ? 'Caixa' : role === 'Estoque' ? 'Estoque' : role === 'Vendedor' ? 'Atendimento' : 'Administrativo';
+      return { needsRegistration: true, role, sector };
+    }
+    return { eid: account.id, employee: { name: account.name, job: account.job, store: account.store, sector: account.sector, shift: account.shift } };
+  }
+  let matches = [];
+  if (ROLE_PASSWORDS[role] === password) {
+    matches = db.employees.filter(x => x.isSystemRole && x.store === store && roleOfJob(x.job) === role && x.passwordHash === A.hashId(password, 'maslow-account-v1'));
+  } else {
+    matches = db.employees.filter(x => !x.isSystemRH && !x.isSystemRole && !x.deviceId && x.store === store && roleOfJob(x.job) === role && x.passwordHash === A.hashId(password, 'maslow-account-v1'));
+  }
   if (!matches.length && role === 'RH') {
     const systemRH = db.employees.find(x => x.isSystemRH && x.passwordHash === A.hashId(password, 'maslow-account-v1'));
     if (systemRH) matches = [systemRH];
@@ -797,11 +850,28 @@ route('POST', '/api/employee/login', (req, res, q, body) => {
 });
 
 route('POST', '/api/register', (req, res, q, body) => {
-  const { store, sector, shift, consent } = body;
-  if (!C.STORES.includes(store) || !C.SECTORS.includes(sector) || !C.SHIFTS.some(s => s.key === shift)) throw bad('Informe loja, setor e turno.');
+  const { store, shift, consent } = body;
+  const sector = body.genericDevice === true
+    ? ({ Caixa: 'Caixa', Vendedor: 'Atendimento', Estoque: 'Estoque', Segurança: 'Administrativo' }[body.job] || '')
+    : body.sector;
+  if (!C.STORES.includes(store) || !C.SECTORS.includes(sector) || !C.SHIFTS.some(s => s.key === shift)) throw bad('Informe loja e turno válidos.');
   const name = String(body.name || '').trim().slice(0, 80);
   if (name.length < 2 || !ROLES.includes(body.job)) throw bad('Informe seu nome e selecione sua função.');
   const password = String(body.password || '');
+  if (body.genericDevice === true) {
+    const deviceId = String(body.deviceId || '');
+    if (!DEVICE_REGISTRATION_ROLES.includes(body.job) || password !== ROLE_PASSWORDS[body.job] || !deviceId) throw bad('A senha não corresponde à função ou não foi possível identificar este dispositivo.');
+    if (!consent) throw bad('É necessário aceitar o termo para continuar.');
+    let employee = db.employees.find(e => e.deviceId === deviceId && roleOfJob(e.job) === body.job);
+    if (employee) {
+      employee.name = name; employee.store = store; employee.sector = sector; employee.shift = shift;
+    } else {
+      employee = { id: uid('e'), name, passwordHash: A.hashId(password, 'maslow-account-v1'), deviceId, job: body.job, store, sector, shift, createdAt: now() };
+      db.employees.push(employee);
+    }
+    save();
+    return { eid: employee.id, employee: { name, job: employee.job, store, sector, shift } };
+  }
   if (password.length < 6) throw bad('A senha precisa ter pelo menos 6 caracteres.');
   const passwordHash = A.hashId(password, 'maslow-account-v1');
   const existing = db.employees.find(e => !e.seeded && !e.passwordHash && e.name && e.name.trim().toLowerCase() === name.toLowerCase() && e.store === store && e.sector === sector && e.shift === shift && roleOfJob(e.job) === body.job);
@@ -840,9 +910,11 @@ route('GET', '/api/me', (req, res, q) => {
   const h = HASH(e.id);
   const dayStart = new Date(t); dayStart.setHours(0,0,0,0);
   const checkinDone = db.checkins.some(c => c.h === h && c.ts >= dayStart.getTime());
+  const deviceHash = q.deviceId ? HASH('device:' + q.deviceId) : null;
+  const deviceCheckinDone = !!deviceHash && db.checkins.some(c => c.deviceHash === deviceHash && c.ts >= dayStart.getTime());
   const weekDays = new Set(db.checkins.filter(c => c.h === h && c.ts >= ws).map(c => new Date(c.ts).toDateString())).size;
   const teamCoins = A.league(db, e.store, t).rows.find(x => x.sector === e.sector)?.moedas || 0;
-  const spentCoins = (db.shopPurchases || []).filter(p => p.eid === e.id).reduce((sum, p) => sum + p.cost, 0);
+  const spentCoins = (db.shopPurchases || []).filter(p => p.eid === e.id).reduce((sum, p) => sum + p.cost * (p.quantity || 1), 0);
   const coins = Math.max(0, teamCoins - spentCoins);
   const firstCheckin = db.checkins.filter(c => c.h === h).sort((a,b)=>a.ts-b.ts)[0];
   const lastReport = Number(localStorage.getItem('maslow_last_health_report_' + e.id) || 0);
@@ -857,7 +929,7 @@ route('GET', '/api/me', (req, res, q) => {
   const monthStart = new Date(new Date(t).getFullYear(), new Date(t).getMonth(), 1).getTime();
   return {
     employee: { name: e.name || '', job: e.job || '', store: e.store, sector: e.sector, shift: e.shift },
-    checkinDone, pendingFeedback, pendingBarrier, weekDays, teamCoins, coins, canReport,
+    checkinDone: checkinDone || deviceCheckinDone, deviceCheckinDone, psychSupportSent: db.contacts.some(c => c.eid === e.id && c.kind === 'psicologia'), healthSupportCount: db.contacts.filter(c => c.eid === e.id && c.kind === 'saude').length, pendingFeedback, pendingBarrier, weekDays, teamCoins, coins, canReport,
     participacoesMes: db.attendances.filter(a => a.eid === e.id && a.ts >= monthStart).length
   };
 });
@@ -873,7 +945,7 @@ route('GET', '/api/rh/activities', (req, res, q) => {
 
 route('POST', '/api/rh/activities', (req, res, q, body) => {
   const e = getEmp(body.eid);
-  if (roleOfJob(e.job) !== 'RH') throw new HttpError(403, 'Somente o RH pode publicar atividades na agenda.');
+  if (!hasManagementRole(e.job)) throw new HttpError(403, 'Somente RH ou gerência podem publicar atividades na agenda.');
   const title = String(body.title || '').trim().slice(0, 100);
   const date = new Date(body.date).getTime();
   if (title.length < 3 || !Number.isFinite(date) || date <= now()) throw bad('Informe o nome e uma data futura para a atividade.');
@@ -906,12 +978,33 @@ route('POST', '/api/shop/buy', (req, res, q, body) => {
   if (!product) throw bad('Item não encontrado.');
   const t = now();
   const teamCoins = A.league(db, e.store, t).rows.find(x => x.sector === e.sector)?.moedas || 0;
-  const spent = (db.shopPurchases || []).filter(p => p.eid === e.id).reduce((sum, p) => sum + p.cost, 0);
+  const spent = (db.shopPurchases || []).filter(p => p.eid === e.id).reduce((sum, p) => sum + p.cost * (p.quantity || 1), 0);
   const balance = Math.max(0, teamCoins - spent);
   if (balance < product.cost) throw new HttpError(400, 'Você ainda não tem moedas suficientes para este resgate.');
   db.shopPurchases.push({ id: uid('p'), eid: e.id, productId: product.id, cost: product.cost, ts: t });
   save();
   return { ok: true, product: product.name, coins: balance - product.cost };
+});
+
+route('POST', '/api/shop/checkout', (req, res, q, body) => {
+  const e = getEmp(body.eid);
+  const requested = Array.isArray(body.items) ? body.items : [];
+  if (!requested.length) throw bad('Adicione ao menos um produto ao carrinho.');
+  const items = requested.map(line => {
+    const product = SHOP_ITEMS.find(x => x.id === line.productId);
+    const quantity = Number(line.quantity);
+    if (!product || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) throw bad('Confira os produtos e quantidades do carrinho.');
+    return { product, quantity };
+  });
+  const total = items.reduce((sum, line) => sum + line.product.cost * line.quantity, 0);
+  const t = now();
+  const teamCoins = A.league(db, e.store, t).rows.find(x => x.sector === e.sector)?.moedas || 0;
+  const spent = (db.shopPurchases || []).filter(p => p.eid === e.id).reduce((sum, p) => sum + p.cost * (p.quantity || 1), 0);
+  const balance = Math.max(0, teamCoins - spent);
+  if (balance < total) throw new HttpError(400, `Saldo insuficiente. O carrinho custa ${total} moedas e você tem ${balance}.`);
+  for (const line of items) db.shopPurchases.push({ id: uid('p'), eid: e.id, productId: line.product.id, cost: line.product.cost, quantity: line.quantity, ts: t });
+  save();
+  return { ok: true, total, coins: balance - total, items: items.map(x => ({ product: x.product.name, quantity: x.quantity })) };
 });
 
 route('GET', '/api/actions', (req, res, q) => {
@@ -987,12 +1080,17 @@ route('POST', '/api/checkin', (req, res, q, body) => {
   if (!Number.isFinite(sleepHours) || sleepHours < 0 || sleepHours > 24) throw bad('Informe as horas dormidas entre 0 e 24.');
   const h = HASH(e.id), t = now(), today = new Date(t); today.setHours(0,0,0,0);
   if (db.checkins.some(c => c.h === h && c.ts >= today.getTime())) throw new HttpError(409, 'Voce ja respondeu o check-in de hoje.');
+  const deviceId = String(body.deviceId || '');
+  if (!deviceId) throw bad('Não foi possível identificar este dispositivo. Atualize a página e tente novamente.');
+  const deviceHash = HASH('device:' + deviceId);
+  if (db.checkins.some(c => c.deviceHash === deviceHash && c.ts >= today.getTime())) throw new HttpError(409, 'Este dispositivo já enviou um check-in hoje. Só é permitido um por aparelho a cada dia.');
   // Respostas de saúde mantêm o identificador irreversível usado para agregação anônima.
-  db.checkins.push({ id: uid('c'), h, store: e.store, sector: e.sector, shift: e.shift, answers, sleepHours, feedbackText: String(body.feedbackText || '').slice(0, 500), ts: t });
+  db.checkins.push({ id: uid('c'), h, deviceHash, store: e.store, sector: e.sector, shift: e.shift, answers, sleepHours, feedbackText: String(body.feedbackText || '').slice(0, 500), ts: t });
   // Pedido de contato: opcional, com consentimento, sem ligacao com o check-in.
   const cr = body.contactRequest;
   if (cr && cr.consent && ['saude', 'psicologia'].includes(cr.kind)) {
-    db.contacts.push({ id: uid('p'), kind: cr.kind, store: e.store, sector: e.sector, shift: e.shift, contact: String(cr.contact || '').slice(0, 120), status: 'novo', ts: t });
+    if (cr.kind === 'psicologia' && db.contacts.some(c => c.eid === e.id && c.kind === 'psicologia')) throw new HttpError(409, 'Você já enviou um pedido de apoio psicológico por este perfil.');
+    db.contacts.push({ id: uid('p'), eid: e.id, kind: cr.kind, store: e.store, sector: e.sector, shift: e.shift, contact: String(cr.contact || '').slice(0, 120), status: 'novo', ts: t });
   }
   save();
   return { ok: true };
@@ -1007,7 +1105,8 @@ route('GET', '/api/health-report', (req, res, q) => {
 route('POST', '/api/contact', (req, res, q, body) => {
   const e = getEmp(body.eid);
   if (!body.consent || !['saude', 'psicologia'].includes(body.kind)) throw bad('Informe o tipo de apoio e aceite o contato.');
-  db.contacts.push({ id: uid('p'), kind: body.kind, store: e.store, sector: e.sector, shift: e.shift, contact: String(body.contact || '').slice(0, 120), status: 'novo', ts: now() });
+  if (body.kind === 'psicologia' && db.contacts.some(c => c.eid === e.id && c.kind === 'psicologia')) throw new HttpError(409, 'Você já enviou um pedido de apoio psicológico por este perfil.');
+  db.contacts.push({ id: uid('p'), eid: e.id, kind: body.kind, store: e.store, sector: e.sector, shift: e.shift, contact: String(body.contact || '').slice(0, 120), status: 'novo', ts: now() });
   save();
   return { ok: true };
 });
@@ -1038,6 +1137,50 @@ route('GET', '/api/admin/ping', (req) => { requireAdmin(req); return { ok: true 
 route('GET', '/api/admin/dashboard', (req, res, q) => {
   requireDashboardAccess(req);
   return A.dashboard(db, { store: q.store, sector: q.sector, shift: q.shift, days: q.days }, now());
+});
+
+route('GET', '/api/admin/coin-ranking', (req, res, q) => {
+  requireAdmin(req);
+  const t = now();
+  const leagues = new Map();
+  const rows = (db.employees || []).filter(e => e.name && !e.isSystemRole && !e.isSystemRH &&
+    (!q.store || e.store === q.store) && (!q.sector || e.sector === q.sector) && (!q.shift || e.shift === q.shift)).map(e => {
+      if (!leagues.has(e.store)) leagues.set(e.store, A.league(db, e.store, t).rows);
+      const earned = leagues.get(e.store).find(r => r.sector === e.sector)?.moedas || 0;
+      const redeemed = (db.shopPurchases || []).filter(p => p.eid === e.id).reduce((sum, p) => sum + p.cost * (p.quantity || 1), 0);
+      return { name: e.name, job: e.job, store: e.store, sector: e.sector, shift: e.shift, earned, redeemed, coins: Math.max(0, earned - redeemed) };
+    }).sort((a, b) => b.coins - a.coins || b.earned - a.earned || a.name.localeCompare(b.name, 'pt-BR'))
+    .map((row, index) => ({ pos: index + 1, ...row }));
+  return { rows };
+});
+
+route('GET', '/api/admin/checkin-ranking', (req, res, q) => {
+  requireAdmin(req);
+  const current = new Date();
+  const parsed = /^(\d{4})-(\d{2})$/.exec(String(q.month || ''));
+  const year = parsed ? Number(parsed[1]) : current.getFullYear();
+  const month = parsed ? Number(parsed[2]) - 1 : current.getMonth();
+  const start = new Date(year, month, 1).getTime(), end = new Date(year, month + 1, 1).getTime();
+  const rows = db.checkins.filter(c => c.ts >= start && c.ts < end && (!q.store || c.store === q.store) && (!q.sector || c.sector === q.sector) && (!q.shift || c.shift === q.shift));
+  const sectorCounts = new Map(), employeeCounts = new Map();
+  const byHash = new Map((db.employees || []).filter(e => e.name && !e.isSystemRole && !e.isSystemRH).map(e => [HASH(e.id), e]));
+  for (const c of rows) {
+    sectorCounts.set(c.sector, (sectorCounts.get(c.sector) || 0) + 1);
+    const e = byHash.get(c.h);
+    if (!e) continue;
+    const key = `${e.sector}\u0000${e.id}`;
+    const current = employeeCounts.get(key) || { name: e.name, job: e.job, sector: e.sector, count: 0 };
+    current.count += 1; employeeCounts.set(key, current);
+  }
+  const sectors = [...sectorCounts].map(([sector, count]) => ({ sector, count })).sort((a, b) => b.count - a.count || a.sector.localeCompare(b.sector, 'pt-BR'));
+  const peopleBySector = new Map();
+  for (const row of employeeCounts.values()) {
+    if (!peopleBySector.has(row.sector)) peopleBySector.set(row.sector, []);
+    peopleBySector.get(row.sector).push(row);
+  }
+  const employeesBySector = [...peopleBySector].map(([sector, employees]) => ({ sector, employees: employees.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'pt-BR')).slice(0, 5) }))
+    .sort((a, b) => (sectors.findIndex(x => x.sector === a.sector) - sectors.findIndex(x => x.sector === b.sector)));
+  return { month: `${year}-${String(month + 1).padStart(2, '0')}`, total: rows.length, sectors, employeesBySector };
 });
 
 route('GET', '/api/admin/contacts', (req) => {

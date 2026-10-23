@@ -1,16 +1,22 @@
 PIRAMIDE DE MASLOW - versao para abrir direto no navegador (sem instalar nada)
 
 1. Extraia o ZIP (nao abra de dentro do zip).
-2. Dê dois cliques em index.html para entrar. Após o login, todas as funções abrem o painel principal; o botão “Check-in” leva ao registro diário, às moedas e ao PDF pessoal.
-3. Na primeira visita, o colaborador cria seu acesso com nome, senha, loja, função e setor. Depois entra selecionando loja e função e informando a senha. Na mesma lista há Vendedor, Caixa, RH, Segurança, Gerente, Estoque e Administrador. O acesso administrador usa a senha 9781.
-4. O perfil RH está cadastrado com a senha 9871. Na aba Agenda do painel, o RH pode publicar atividades; os demais colaboradores podem confirmar ou cancelar a própria presença nas atividades futuras.
+2. Dê dois cliques em index.html para entrar. Após informar loja, função e senha, o sistema abre diretamente a Visão geral.
+   A única loja cadastrada é Supermercado Maslow.
+3. Use as senhas de acesso por função: Administrador 9781, RH 9871, Gerente 0000, Caixa 9187, Vendedor 9817, Segurança 2222 e Estoque 3333. No primeiro acesso de Caixa, Vendedor, Segurança ou Estoque em cada dispositivo, informe o nome e o turno.
+4. RH e Gerência têm acesso ao painel completo. Na aba Saúde, RH e Gerência podem gerar um PDF semanal agregado de todos os setores, com respostas de grupos pequenos ocultadas. Na aba Agenda, RH e Gerência podem publicar atividades; os demais colaboradores podem confirmar ou cancelar a própria presença nas atividades futuras.
 5. Para abrir o painel de gestão diretamente, dê dois cliques em painel.html e use a senha de administrador (9781).
 
 O colaborador escolhe sua função entre os cargos de supermercado, registra dores, satisfação, horas dormidas e feedback em check-ins diários.
 Cada colaborador da equipe recebe 10 moedas virtuais por semana quando todos os integrantes cadastrados da equipe completam os sete check-ins diários. O saldo pessoal aparece no topo da tela e pode ser usado na Loja virtual.
 Depois de sete dias, o colaborador pode gerar uma avaliação semanal pessoal com seus check-ins e salvá-la como PDF pela janela de impressão. A geração pode ser feita uma vez a cada sete dias.
 
+Na Loja virtual, o colaborador adiciona recompensas ao carrinho, ajusta quantidades e confere o total em moedas antes de concluir o resgate. O catálogo inclui vale-lanche, arroz, feijão, café, cupons de desconto e outros produtos. A administração, a gerência e o RH podem consultar o ranking de moedas na aba Loja virtual. O botão Voltar retorna à tela inicial de login.
+
+Na mesma aba, administração, gerência e RH veem gráficos mensais de check-ins por setor e do número de respostas dos cinco colaboradores mais participativos de cada setor. O ranking mostra apenas contagens de participação, sem exibir respostas de saúde. Cada perfil pode enviar somente um pedido de apoio psicológico.
+
 Os dados de demonstração ficam salvos no próprio navegador (localStorage). Contas e senhas funcionam apenas nesta demonstração local; para uso real, configure autenticação segura e catálogo de recompensas da empresa. As respostas individuais de saúde são usadas pelo colaborador no PDF pessoal; o painel administrativo mostra resultados agregados.
+Cada celular, computador ou tablet pode enviar apenas um check-in por dia, inclusive se alguém sair e entrar com outra função no mesmo dispositivo. O cadastro do primeiro acesso fica associado ao navegador e dispositivo usados.
 Use o MESMO navegador para o app e o painel, para que um enxergue o que o outro fez.
 Para restaurar os dados de demonstração: abra o console (F12) e rode pausaDemoReset()
 Obs.: o QR code do painel precisa de internet; o codigo de 6 letras funciona offline.

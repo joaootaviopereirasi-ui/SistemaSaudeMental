@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 190" role="img" aria-labelledby="title">
+  <title id="title">Pirâmide Maslow</title>
+  <g fill="none" stroke="#203943" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="267" cy="34" r="23" fill="#203943" stroke="none"/>
+    <path d="M80 125 163 47l43 79 36-48 54 48H80Z" stroke-width="6"/>
+    <path d="m112 95 40-12m-54 29 60-18m28 9 24-6m-83 28 17-54m-5 58 50-65m-5 64 24-32m19 33 26-37m-228 47h239" stroke-width="4"/>
+    <path d="M119 143q79 16 157 0" stroke-width="3"/>
+  </g>
+  <text x="210" y="180" text-anchor="middle" fill="#68727c" font-family="Arial,Helvetica,sans-serif" font-size="21" letter-spacing="5">PIRÂMIDE MASLOW</text>
+</svg>

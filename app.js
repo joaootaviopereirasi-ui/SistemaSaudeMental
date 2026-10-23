@@ -8,13 +8,19 @@ const ls = {
 };
 const params = new URLSearchParams(location.search);
 const S = {
-  meta: null, eid: (() => { try { return sessionStorage.getItem('pausa_panel_eid'); } catch { return null; } })(), me: null, tab: 'acoes', actions: [], showAll: false, league: null, votes: [], rhActivities: [], agendaMonth: '', rhDraft: { title: '', date: '', location: '', description: '' },
+  meta: null, eid: (() => { try { return sessionStorage.getItem('pausa_panel_eid'); } catch { return null; } })(), me: null, tab: params.get('tab') === 'saude' ? 'saude' : 'acoes', actions: [], showAll: false, league: null, votes: [], rhActivities: [], agendaMonth: '', rhDraft: { title: '', date: '', location: '', description: '' },
   answers: {}, sleepHours: '', dailyFeedback: '', accessMode: null, adminPin: '', contact: { kind: 'saude', contact: '', consent: false, open: false }, barrierFor: null, fb: {}, codeOpen: false,
   code: params.get('presenca') || '', presenca: params.get('presenca') || '', edit: false, justDone: false, reg: { name: '', job: '', store: '', sector: '', shift: '', consent: false },
-  loading: false, error: '', login: { store: '', role: '', password: '' }
+  loading: false, error: '', genericRegistration: false, cart: {}, cartOpen: false, login: { store: '', role: '', password: '' }
 };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function getDeviceId() {
+  let id = ls.get('maslow_device_id');
+  if (!id) { id = 'd-' + (globalThis.crypto?.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2))); ls.set('maslow_device_id', id); }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
 async function api(path, body) {
   if (typeof window.pausaDemoRequest === 'function') return window.pausaDemoRequest(path, body);
   const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {};
@@ -42,6 +48,7 @@ const localMonthKey = (date = new Date()) => `${date.getFullYear()}-${String(dat
 function shiftMonth(key, delta) { const d = new Date(`${key}-01T12:00:00`); d.setMonth(d.getMonth() + delta); return localMonthKey(d); }
 function monthLabel(key) { return new Date(`${key}-01T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); }
 const isRhEmployee = (employee) => /\bRH\b|recursos humanos/i.test(employee?.job || '');
+const managementPanelUrl = (employee) => /\bRH\b|recursos humanos|gerente/i.test(employee?.job || '') ? 'painel.html' : 'index.html?space=1&tab=saude';
 
 // ------------------------------------------------------------------ dados
 async function load() {
@@ -50,10 +57,11 @@ async function load() {
     if (!S.meta) S.meta = await api('/api/meta');
     if (!S.eid) { S.loading = false; return render(); }
     const [me, ac, lg, vt, rh] = await Promise.all([
-      api('/api/me?eid=' + S.eid), api(`/api/actions?eid=${S.eid}&all=${S.showAll ? 1 : 0}`),
+      api('/api/me?eid=' + S.eid + '&deviceId=' + encodeURIComponent(DEVICE_ID)), api(`/api/actions?eid=${S.eid}&all=${S.showAll ? 1 : 0}`),
       api('/api/league?eid=' + S.eid), api('/api/votes?eid=' + S.eid), api('/api/rh/activities?eid=' + S.eid)
     ]);
     S.me = me; S.actions = ac.actions; S.league = lg; S.votes = vt.types; S.rhActivities = rh.activities; S.error = '';
+    try { S.cart = JSON.parse(ls.get('maslow_cart_' + S.eid) || '{}') || {}; } catch { S.cart = {}; }
   } catch (e) {
     if (e.status === 401) { ls.del('pausa_eid'); S.eid = null; S.me = null; }
     else S.error = !S.meta ? `Falha ao iniciar a aplicação: ${e.message || 'não foi possível carregar os dados iniciais.'}` : 'Não foi possível carregar. Verifique a conexão e tente de novo.';
@@ -71,18 +79,20 @@ async function attend(code) {
 
 // ------------------------------------------------------------------ views
 function viewAccess() {
-  if (!S.login.store && S.meta.stores.length) S.login.store = S.meta.stores[0];
+  S.login.store = 'Supermercado Maslow';
   if (!S.login.role && S.meta.roles?.length) S.login.role = S.meta.roles[0];
   return `<main class="login-layout"><section class="login-panel">
-    <p class="login-kicker">ACESSO AO SISTEMA</p>
-    <h1>Seja bem-vindo</h1><p class="login-intro">Selecione sua função e informe a senha para acessar.</p>
-    <label class="field"><span>Loja / empresa</span><select id="loginStore">${S.meta.stores.map(x => `<option ${S.login.store === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+    <div class="login-brand"><img src="assets/logo-login.svg" alt="Pirâmide de Maslow"></div>
+    <p class="login-kicker">ACESSO À EQUIPE</p>
+    <h1>Bem-vindo</h1><p class="login-intro">Entre com sua função e senha para acessar o painel da equipe.</p>
+    <div class="field"><span>Loja / empresa</span><div class="login-company" aria-label="Supermercado Maslow">Supermercado Maslow</div></div>
     <label class="field"><span>Usuário / função</span><select id="loginRole">${S.meta.loginRoles.map(x => `<option ${S.login.role === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-    <label class="field"><span>Senha</span><input id="loginPassword" type="password" value="${esc(S.login.password)}" autocomplete="current-password" placeholder="Sua senha"></label>
+    <label class="field"><span>Senha</span><input id="loginPassword" type="password" value="${esc(S.login.password)}" autocomplete="current-password" placeholder="Digite sua senha"></label>
+    <p class="small muted login-role-help">Use a senha correspondente à função selecionada. No primeiro acesso de Caixa, Vendedor, Segurança ou Estoque, informe seu nome e turno.</p>
     ${S.error ? `<p class="small" role="alert" style="color:var(--vermelho)">${esc(S.error)}</p>` : ''}
-    <button class="btn primary login-submit" data-act="employee-login">Entrar</button>
-    <div class="login-links"><button class="link" data-act="register-open">Criar acesso de colaborador</button></div>
-  </section><aside class="login-art"><div class="art-shape"></div><p class="login-kicker">CUIDADO NO DIA A DIA</p><h2>Um bom trabalho começa com pessoas bem.</h2><span>Agenda, saúde e reconhecimento em um só lugar.</span></aside></main>`;
+    <button class="btn primary login-submit" data-act="employee-login">Entrar no sistema</button>
+    <div class="login-links"><button class="link" data-act="register-open">Criar acesso de colaborador</button><span class="login-help">Acesso pessoal e seguro</span></div>
+  </section></main>`;
 }
 function viewAdminAccess() {
   return `<header class="top"><img class="app-logo" src="assets/piramide-maslow-logo.png" alt="Pirâmide de Maslow"></header><section class="card access-form"><h1>Acesso administrador</h1><p class="muted">Área de gestão do programa.</p><label class="field"><span>Senha</span><input id="adminPin" type="password" inputmode="numeric" autocomplete="current-password" value="${esc(S.adminPin)}" maxlength="12"></label>${S.error ? `<p class="small" role="alert" style="color:var(--vermelho)">${esc(S.error)}</p>` : ''}<div class="row"><button class="btn ghost" data-act="back-access">Voltar</button><button class="btn primary" data-act="admin-login">Entrar</button></div></section>`;
@@ -90,24 +100,25 @@ function viewAdminAccess() {
 function viewOnboarding() {
   const m = S.meta, r = S.edit && S.me ? S.me.employee : S.reg;
   const editing = S.edit && S.me;
+  const generic = S.genericRegistration && !editing;
   return `
   <header class="top"><img class="app-logo" src="assets/piramide-maslow-logo.png" alt="Pirâmide de Maslow"></header>
   <section class="card hero stack">
-    <h1>${editing ? 'Atualizar meu perfil' : 'Criar acesso'}</h1>
-    <p>${editing ? 'Atualize seus dados de trabalho.' : 'Preencha seus dados para acessar a aplicação.'}</p>
+    <h1>${editing ? 'Atualizar meu perfil' : generic ? 'Cadastro do colaborador' : 'Criar acesso'}</h1>
+    <p>${editing ? 'Atualize seus dados de trabalho.' : generic ? `Informe seus dados de ${esc(r.job)} para este dispositivo.` : 'Preencha seus dados para acessar a aplicação.'}</p>
   </section>
   <section class="card" style="margin-top:12px">
     <label class="field"><span>Nome</span><input type="text" data-f="name" value="${esc(r.name)}" maxlength="80" autocomplete="name" placeholder="Seu nome" ${editing ? '' : 'required'}></label>
-    ${editing ? '' : `<label class="field"><span>Senha (mínimo 6 caracteres)</span><input type="password" data-f="password" value="${esc(S.reg.password)}" autocomplete="new-password" required></label><label class="field"><span>Confirme a senha</span><input type="password" data-f="passwordConfirm" value="${esc(S.reg.passwordConfirm)}" autocomplete="new-password" required></label><p class="small muted">No login, a função selecionada e a senha identificam seu acesso. Use uma senha pessoal.</p>`}
-    <label class="field"><span>Função no supermercado</span><select data-f="job" ${editing ? '' : 'required'}><option value="">Selecione sua função</option>${(editing ? [...new Set([...m.roles, ...m.jobs])] : m.roles).map(x => `<option value="${esc(x)}" ${r.job === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-    <label class="field"><span>Loja</span><select data-f="store"><option value="">Selecione</option>${m.stores.map(x => `<option ${r.store === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-    <label class="field"><span>Setor</span><select data-f="sector"><option value="">Selecione</option>${m.sectors.map(x => `<option ${r.sector === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
-    <label class="field"><span>Turno</span><select data-f="shift"><option value="">Selecione</option>${m.shifts.map(x => `<option value="${x.key}" ${r.shift === x.key ? 'selected' : ''}>${x.label} (${x.hours})</option>`).join('')}</select></label>
+    ${generic ? `<label class="field"><span>Senha de acesso</span><input type="password" data-f="password" value="${esc(S.reg.password || ({ Caixa: '9187', Vendedor: '9817', Segurança: '2222', Estoque: '3333' }[r.job] || ''))}" inputmode="numeric" maxlength="4" autocomplete="new-password" required><small class="muted">Use a senha definida para a função ${esc(r.job)}.</small></label>` : editing ? '' : `<label class="field"><span>Senha (mínimo 6 caracteres)</span><input type="password" data-f="password" value="${esc(S.reg.password)}" autocomplete="new-password" required></label><label class="field"><span>Confirme a senha</span><input type="password" data-f="passwordConfirm" value="${esc(S.reg.passwordConfirm)}" autocomplete="new-password" required></label><p class="small muted">No login, a função selecionada e a senha identificam seu acesso. Use uma senha pessoal.</p>`}
+    ${generic ? `<div class="field"><span>Função</span><div class="login-company">${esc(r.job)}</div></div>` : `<label class="field"><span>Função no supermercado</span><select data-f="job" ${editing ? '' : 'required'}><option value="">Selecione sua função</option>${(editing ? [...new Set([...m.roles, ...m.jobs])] : m.roles).map(x => `<option value="${esc(x)}" ${r.job === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`}
+    ${generic ? '' : `<label class="field"><span>Loja</span><select data-f="store"><option value="">Selecione</option>${m.stores.map(x => `<option ${r.store === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`}
+    ${generic ? '' : `<label class="field"><span>Setor</span><select data-f="sector"><option value="">Selecione</option>${m.sectors.map(x => `<option ${r.sector === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`}
+    <label class="field"><span>Turno de entrada e saída</span><select data-f="shift" required><option value="">Selecione</option>${m.shifts.map(x => `<option value="${x.key}" ${r.shift === x.key ? 'selected' : ''}>${x.label} (${x.hours})</option>`).join('')}</select></label>
     ${editing ? '' : `<label class="check"><input type="checkbox" data-f="consent" ${S.reg.consent ? 'checked' : ''}><span>Entendo que minhas respostas de saúde são <b>anônimas</b>: a empresa só vê resultados de grupos (mínimo de ${m.kMin} pessoas). Não é diagnóstico médico.</span></label>`}
     <div class="row">
       ${editing ? '' : '<button class="btn ghost" data-act="back-access">Voltar ao login</button>'}
-      ${editing ? '<button class="btn ghost" data-act="cancel-edit">Cancelar</button>' : ''}
-      <button class="btn primary" data-act="${editing ? 'save-profile' : 'register'}">${editing ? 'Salvar' : 'Criar acesso'}</button>
+      ${editing ? '<button class="btn ghost" data-act="cancel-edit">Cancelar</button><button class="btn ghost" data-act="login-return">Voltar ao login</button>' : ''}
+      <button class="btn primary" data-act="${editing ? 'save-profile' : 'register'}">${editing ? 'Salvar' : generic ? 'Concluir cadastro' : 'Criar acesso'}</button>
     </div>
     ${S.error ? `<p class="small" style="color:var(--vermelho)">${esc(S.error)}</p>` : ''}
   </section>`;
@@ -179,7 +190,7 @@ function viewAgenda() {
     <h1>Ações para o seu turno</h1>
     <p>${esc(shiftName(emp.shift))} · ${esc(emp.sector)}${me.participacoesMes ? ` · ${me.participacoesMes} participaç${me.participacoesMes > 1 ? 'ões' : 'ão'} neste mês` : ''}</p>
   </section>
-  <section class="card coin-card"><b>🪙 ${me.teamCoins || 0} moedas da sua equipe</b><p class="small muted">${me.weekDays || 0} de 7 dias completos nesta semana. Ganhem 10 moedas quando todos registrarem o check-in diário.</p><button class="btn sm" data-act="tab" data-t="equipe">Ver moedas e classificação</button></section>
+  <section class="card coin-card"><b><span class="game-coin" aria-hidden="true">✦</span> ${me.teamCoins || 0} moedas da sua equipe</b><p class="small muted">${me.weekDays || 0} de 7 dias completos nesta semana. Ganhem 10 moedas quando todos registrarem o check-in diário.</p><button class="btn sm" data-act="tab" data-t="equipe">Ver moedas e classificação</button></section>
   ${me.checkinDone ? '' : `<button class="card daily-checkin" style="width:100%;text-align:left;margin-top:12px" data-act="go-saude"><b>Check-in de saúde de hoje</b><div class="small muted">Conte como está se sentindo e registre seu sono.</div></button>`}
   <div class="stack" style="margin-top:12px">
     ${pend.join('')}${extra}
@@ -199,38 +210,38 @@ function viewSaude() {
   const answered = items.filter(i => S.answers[i.key]).length;
   const done = S.me.checkinDone || S.justDone;
   const c = S.contact;
-  const reportBlock = S.me.canReport ? `<section class="card report-card" style="margin-top:12px"><h3>Avaliação semanal de saúde</h3><p class="small muted">O PDF reúne seus check-ins dos últimos sete dias, horas de sono, satisfação e feedbacks.</p><button class="btn primary" style="width:100%" data-act="health-report">Gerar avaliação semanal em PDF</button></section>` : '';
+  const psychNotice = S.me.psychSupportSent ? '<p class="small muted support-history">Você já enviou seu pedido de apoio psicológico por este perfil.</p>' : '';
+  const healthNotice = S.me.healthSupportCount ? `<p class="small muted support-history">Pedidos de Saúde ocupacional enviados: ${S.me.healthSupportCount}. Você pode solicitar contato novamente quando precisar.</p>` : '';
+  const reportBlock = S.me.canReport ? `<section class="card report-card"><div><span class="section-eyebrow">SEU RESUMO</span><h3>Avaliação semanal de saúde</h3><p class="small muted">Seus check-ins, sono, satisfação e feedback dos últimos sete dias.</p></div><button class="btn primary" data-act="health-report">Gerar PDF semanal</button></section>` : '';
   const contactBlock = `
-  <section class="card" style="margin-top:12px">
-    <h3>Quer conversar com alguém?</h3>
-    <p class="small muted" style="margin:6px 0 0">É opcional e separado do check-in. Só a equipe de saúde da empresa recebe o seu pedido, e só se você aceitar.</p>
+  <section class="card support-card">
+    <div class="support-heading"><span class="support-icon" aria-hidden="true">＋</span><div><h3>Precisa conversar com alguém?</h3><p class="small muted">Peça um contato confidencial da equipe de saúde.</p></div></div>
+    <p class="support-separation">Este pedido é opcional e separado do check-in. Não reabre nem altera suas respostas diárias.</p>
     ${c.open ? `
-      <div class="chips" role="group" aria-label="Tipo de apoio">
-        <button class="chip" data-act="ck" data-k="saude" aria-pressed="${c.kind === 'saude'}">Saúde ocupacional</button>
-        <button class="chip" data-act="ck" data-k="psicologia" aria-pressed="${c.kind === 'psicologia'}">Apoio psicológico</button>
+      <div class="support-options" role="group" aria-label="Tipo de apoio">
+        <button class="support-option" data-act="ck" data-k="saude" aria-pressed="${c.kind === 'saude'}"><b>Saúde ocupacional</b><small>Orientação sobre saúde no trabalho</small></button>
+        <button class="support-option" data-act="ck" data-k="psicologia" aria-pressed="${c.kind === 'psicologia'}" ${S.me.psychSupportSent ? 'disabled' : ''}><b>${S.me.psychSupportSent ? 'Apoio psicológico · enviado' : 'Apoio psicológico'}</b><small>${S.me.psychSupportSent ? 'Já existe um pedido neste perfil' : 'Conversa com profissional de apoio'}</small></button>
       </div>
-      <label class="field"><span>Como prefere ser contatado(a)? (nome e telefone)</span><input type="text" id="contact" value="${esc(c.contact)}" maxlength="120" autocomplete="off"></label>
+      <label class="field"><span>Seu nome e telefone para contato</span><input type="text" id="contact" value="${esc(c.contact)}" maxlength="120" autocomplete="off" placeholder="Ex.: João · (11) 99999-9999"></label>
       <label class="check"><input type="checkbox" data-f="cconsent" ${c.consent ? 'checked' : ''}><span>Autorizo a equipe de saúde a entrar em contato comigo.</span></label>
-      <div class="row"><button class="btn ghost" data-act="contact-close">Cancelar</button><button class="btn primary" data-act="contact-send" ${c.consent ? '' : 'disabled'}>Enviar pedido</button></div>`
-      : `<div class="row"><button class="btn" data-act="contact-open">Quero conversar</button></div>`}
+      <div class="row support-actions"><button class="btn ghost" data-act="contact-close">Cancelar</button><button class="btn primary" data-act="contact-send" ${c.consent ? '' : 'disabled'}>Solicitar contato</button></div>`
+      : `${healthNotice}${psychNotice}<button class="btn support-start" data-act="contact-open">Solicitar apoio</button>`}
   </section>`;
   if (done) return `
-    <section class="card hero"><h1>Check-in de hoje concluído</h1><p>Obrigado por cuidar de você e da sua equipe.</p></section>
-    <section class="card coin-card" style="margin-top:12px"><b>🪙 ${S.me.teamCoins || 0} moedas da equipe</b><p class="small muted">A equipe ganha 10 moedas por semana quando todas as pessoas completam os sete check-ins diários.</p><div class="progress"><i style="width:${Math.round((S.me.weekDays || 0)/7*100)}%"></i></div><p class="small muted">${S.me.weekDays || 0} de 7 dias registrados nesta semana</p></section>
+    <section class="card checkin-complete"><div class="complete-mark" aria-hidden="true">✓</div><div><span class="section-eyebrow">CHECK-IN DIÁRIO</span><h1>${S.me.deviceCheckinDone && !S.me.checkinDone ? 'Resposta já registrada hoje' : 'Check-in concluído'}</h1><p>${S.me.deviceCheckinDone && !S.me.checkinDone ? 'Este aparelho já foi usado para responder hoje.' : 'Obrigado por registrar como você está se sentindo.'}</p></div></section>
+    <section class="card checkin-locked"><b>Formulário fechado por hoje</b><span>Para evitar respostas duplicadas, o check-in não pode ser editado ou enviado novamente neste aparelho hoje. Ele será liberado amanhã.</span></section>
+    <section class="card coin-card weekly-progress"><div class="weekly-progress-head"><div><span class="section-eyebrow">META DA EQUIPE</span><b><span class="game-coin" aria-hidden="true">✦</span> ${S.me.teamCoins || 0} moedas</b></div><span class="week-count">${S.me.weekDays || 0}/7 dias</span></div><p class="small muted">A equipe recebe 10 moedas quando todos completam os sete check-ins diários da semana.</p><div class="progress" role="progressbar" aria-label="Dias completos da equipe nesta semana" aria-valuemin="0" aria-valuemax="7" aria-valuenow="${S.me.weekDays || 0}"><i style="width:${Math.round((S.me.weekDays || 0)/7*100)}%"></i></div></section>
     ${reportBlock}
-    <section class="card notice" style="margin-top:12px">Suas respostas de check-in são anônimas para a empresa. O PDF semanal fica acessível apenas neste perfil e reúne as respostas dos últimos sete dias.</section>${contactBlock}`;
+    <section class="card notice checkin-privacy">Suas respostas individuais são confidenciais e usadas apenas no resumo semanal do seu perfil. A empresa vê resultados de saúde agrupados.</section>${contactBlock}`;
   return `
-  <section class="card hero"><h1>Check-in de hoje</h1><p>Responda sobre dores, sono e satisfação com o trabalho.</p></section>
-  <div class="progress" style="margin:12px 0" aria-hidden="true"><i style="width:${Math.round(answered / items.length * 100)}%"></i></div>
-  <section class="card">
-    ${items.map(i => `<div class="q"><p id="q-${i.key}">${esc(i.question)}</p>
-      <div class="scale" role="group" aria-labelledby="q-${i.key}">${[1, 2, 3, 4, 5].map(n => `<button data-act="ans" data-k="${i.key}" data-n="${n}" aria-pressed="${S.answers[i.key] === n}">${n}</button>`).join('')}</div>
-      <div class="ends"><span>${esc(i.low)}</span><span>${esc(i.high)}</span></div></div>`).join('')}
-    <label class="field"><span>Quantas horas você dormiu nas últimas 24 horas?</span><input type="number" id="sleepHours" min="0" max="24" step="0.5" inputmode="decimal" value="${esc(S.sleepHours)}" placeholder="Ex.: 7,5" required></label>
-    <label class="field"><span>Quer deixar um feedback sobre seu dia? (opcional)</span><textarea id="dailyFeedback" maxlength="500" rows="3" placeholder="Conte sobre uma dor, algo que foi bem ou o que poderia melhorar.">${esc(S.dailyFeedback)}</textarea></label>
-    <button class="btn primary" style="width:100%;margin-top:12px" data-act="checkin-send" ${answered === items.length && S.sleepHours !== '' ? '' : 'disabled'}>Enviar check-in (${answered}/${items.length})</button>
+  <section class="card checkin-intro"><span class="section-eyebrow">SAÚDE E BEM-ESTAR</span><h1>Check-in de hoje</h1><p>Leva cerca de 2 minutos. Suas respostas ajudam a entender como está o dia a dia no trabalho.</p><div class="checkin-meter"><div class="progress" role="progressbar" aria-label="Perguntas respondidas" aria-valuemin="0" aria-valuemax="${items.length}" aria-valuenow="${answered}"><i style="width:${Math.round(answered / items.length * 100)}%"></i></div><b>${answered} de ${items.length} perguntas</b></div></section>
+  <section class="card checkin-form">
+    ${['fisica','mental'].map((group, index) => `<div class="checkin-group"><div class="checkin-group-heading"><span>${index + 1}</span><div><h2>${group === 'fisica' ? 'Como você está se sentindo?' : 'Como foi seu dia de trabalho?'}</h2><p>${group === 'fisica' ? 'Dores, cansaço e qualidade do sono' : 'Satisfação, humor e apoio da equipe'}</p></div></div>${items.filter(i => i.group === group).map(i => `<article class="q"><p id="q-${i.key}">${esc(i.question)}</p><div class="scale" role="group" aria-labelledby="q-${i.key}">${[1, 2, 3, 4, 5].map(n => `<button data-act="ans" data-k="${i.key}" data-n="${n}" aria-pressed="${S.answers[i.key] === n}" aria-label="${n} de 5">${n}</button>`).join('')}</div><div class="ends"><span>${esc(i.low)}</span><span>${esc(i.high)}</span></div></article>`).join('')}</div>`).join('')}
+    <div class="checkin-extra"><label class="field"><span>Horas de sono</span><small>Quantas horas você dormiu nas últimas 24 horas?</small><div class="sleep-input"><input type="number" id="sleepHours" min="0" max="24" step="0.5" inputmode="decimal" value="${esc(S.sleepHours)}" placeholder="Ex.: 7,5" required><span>horas</span></div></label>
+    <label class="field"><span>Comentário sobre seu dia <em>(opcional)</em></span><textarea id="dailyFeedback" maxlength="500" rows="3" placeholder="Algo que foi bem ou que poderia melhorar?">${esc(S.dailyFeedback)}</textarea></label></div>
+    <div class="checkin-submit"><p class="small muted">Você só pode enviar um check-in por dia neste aparelho. Depois de enviado, o formulário fica fechado até amanhã.</p><button class="btn primary" data-act="checkin-send" ${answered === items.length && S.sleepHours !== '' ? '' : 'disabled'}>Enviar check-in</button></div>
   </section>
-  <p class="small muted" style="margin-top:10px">Anônimo. Não é diagnóstico médico: mede como você se sente para a empresa agir onde há mais necessidade.</p>
+  <p class="small muted checkin-footnote">O check-in não é diagnóstico médico. As respostas individuais são confidenciais e os resultados da empresa aparecem de forma agrupada.</p>
   ${reportBlock}
   ${contactBlock}`;
 }
@@ -248,17 +259,23 @@ function viewEquipe() {
       <div><b>${esc(r.sector)}</b>${r.sector === L.mySector ? ' <span class="tag">sua equipe</span>' : ''}
         <div class="bar" role="img" aria-label="${r.participacao}% participaram"><i style="width:${r.participacao}%"></i></div>
         <div class="small muted">${r.participacao}% participaram · ${r.checkin}% responderam o check-in</div></div>
-      <b>${r.pontos} pts</b><span class="coin-count">🪙 ${r.moedas || 0}</span></div>`).join('')}
-    <section class="coin-card"><b>🪙 ${mine?.moedas || 0} moedas</b><p class="small muted">Moedas acumuladas pela sua equipe: 10 por cada semana completa com os sete check-ins diários de todas as pessoas.</p><p class="small muted">Nesta semana: ${mine?.diasEquipe || 0} de 7 dias registrados por toda a equipe.</p></section>
+      <b>${r.pontos} pts</b><span class="coin-count"><span class="game-coin" aria-hidden="true">✦</span> ${r.moedas || 0} moedas</span></div>`).join('')}
+    <section class="coin-card"><b><span class="game-coin" aria-hidden="true">✦</span> ${mine?.moedas || 0} moedas</b><p class="small muted">Moedas acumuladas pela sua equipe: 10 por cada semana completa com os sete check-ins diários de todas as pessoas.</p><p class="small muted">Nesta semana: ${mine?.diasEquipe || 0} de 7 dias registrados por toda a equipe.</p></section>
     <p class="small muted" style="margin:12px 0 0">A classificação mensal combina participação em ações e check-ins. As moedas premiam o cuidado coletivo diário.</p>
   </section>`;
 }
 
 function viewShop() {
   const coins = S.me.coins || 0;
+  const products = S.meta.shopItems || [];
+  const lines = Object.entries(S.cart).map(([id, quantity]) => ({ product: products.find(p => p.id === id), quantity: Math.max(0, Number(quantity) || 0) })).filter(x => x.product && x.quantity > 0);
+  const total = lines.reduce((sum, x) => sum + x.product.cost * x.quantity, 0);
+  const count = lines.reduce((sum, x) => sum + x.quantity, 0);
+  const cart = S.cartOpen ? `<section class="card cart-panel"><div class="cart-heading"><div><h2>Carrinho de compras</h2><p class="small muted">Confira a quantidade e o total em moedas.</p></div><button class="btn sm ghost" data-act="cart-toggle" aria-label="Fechar carrinho">Fechar</button></div>${lines.length ? lines.map(x => `<div class="cart-line"><div><b>${esc(x.product.name)}</b><small>${x.quantity} × ${x.product.cost} moedas</small></div><div class="cart-controls"><button class="btn sm" data-act="cart-quantity" data-item="${esc(x.product.id)}" data-delta="-1" aria-label="Diminuir quantidade">−</button><b>${x.quantity}</b><button class="btn sm" data-act="cart-quantity" data-item="${esc(x.product.id)}" data-delta="1" aria-label="Aumentar quantidade">+</button></div><b><span class="game-coin" aria-hidden="true">✦</span> ${x.product.cost * x.quantity}</b></div>`).join('') : '<p class="muted">Seu carrinho está vazio.</p>'}<div class="cart-total"><span>Total</span><b><span class="game-coin" aria-hidden="true">✦</span> ${total} moedas</b></div><p class="small muted">Seu saldo: ${coins} moedas${total > coins ? ` · faltam ${total - coins}` : ''}</p><div class="row"><button class="btn ghost" data-act="cart-clear" ${lines.length ? '' : 'disabled'}>Esvaziar</button><button class="btn primary" data-act="cart-checkout" ${!lines.length || total > coins ? 'disabled' : ''}>Finalizar resgate</button></div></section>` : '';
   return `<section class="card hero"><h1>Loja virtual</h1><p>Troque suas moedas por itens de reconhecimento.</p></section>
-    <section class="wallet-panel"><span>Seu saldo</span><b>🪙 ${coins} moedas</b><small>10 moedas para cada pessoa quando a equipe completa todos os check-ins da semana.</small></section>
-    <div class="shop-grid">${S.meta.shopItems.map(p => `<article class="card shop-item"><span class="shop-icon">${esc(p.icon)}</span><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p><div class="shop-buy"><b>🪙 ${p.cost}</b><button class="btn sm ${coins < p.cost ? 'ghost' : 'primary'}" data-act="shop-buy" data-item="${esc(p.id)}" ${coins < p.cost ? 'disabled' : ''}>Resgatar</button></div></article>`).join('')}</div>
+    <section class="wallet-panel"><span>Seu saldo</span><b><span class="game-coin" aria-hidden="true">✦</span> ${coins} moedas</b><small>Consulte o carrinho para ver o valor total antes de resgatar.</small></section>
+    <div class="shop-toolbar"><span>Recompensas disponíveis</span><button class="btn primary" data-act="cart-toggle">🛒 Carrinho <span class="cart-badge">${count}</span></button></div>${cart}
+    <div class="shop-grid">${products.map(p => `<article class="card shop-item"><span class="shop-icon">${esc(p.icon)}</span><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p><div class="shop-buy"><b><span class="game-coin" aria-hidden="true">✦</span> ${p.cost} moedas</b><button class="btn sm primary" data-act="cart-add" data-item="${esc(p.id)}">Adicionar ao carrinho</button></div></article>`).join('')}</div>
     <p class="small muted" style="margin:14px 2px">Catálogo demonstrativo. Os itens e condições reais de resgate devem ser definidos pela administração.</p>`;
 }
 
@@ -268,7 +285,7 @@ function viewMain() {
   const tab = (k, l) => `<button data-act="tab" data-t="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${l}</button>`;
   return `
   <header class="top"><img class="app-logo" src="assets/piramide-maslow-logo.png" alt="Pirâmide de Maslow">
-    <div class="top-right"><span class="wallet-pill">🪙 ${S.me.coins || 0} moedas</span><div class="who">${esc(emp.name || 'Colaborador')} · ${esc(emp.job || shiftName(emp.shift))}<br>${esc(emp.store)} · <button data-act="edit">perfil</button> · <button data-act="logout">sair</button></div></div></header>
+    <div class="top-right"><div class="who"><span class="who-name">${esc(emp.name || 'Colaborador')} · ${esc(emp.job || shiftName(emp.shift))}<br>${esc(emp.store)}</span><div class="employee-actions"><button class="header-action" data-act="edit">Perfil</button><button class="header-action" data-act="login-return">← Voltar</button><button class="header-action exit" data-act="logout">Sair</button></div></div><span class="wallet-pill"><span class="game-coin" aria-hidden="true">✦</span> ${S.me.coins || 0} moedas</span></div></header>
   ${S.error ? `<div class="card" style="color:var(--vermelho);margin-bottom:12px">${esc(S.error)}</div>` : ''}
   ${body}
   <nav class="tabs" aria-label="Seções">${tab('agenda', 'Agenda')}${tab('saude', 'Saúde')}${tab('equipe', 'Equipe')}${tab('loja', 'Loja virtual')}${tab('acoes', 'Ações')}</nav>`;
@@ -306,13 +323,23 @@ $app.addEventListener('input', (e) => {
   if (e.target.id === 'sleepHours') { S.sleepHours = e.target.value; render(); }
 });
 $app.addEventListener('change', (e) => {
-  if (e.target.id === 'loginStore') { S.login.store = e.target.value; return; }
   if (e.target.id === 'loginRole') { S.login.role = e.target.value; return; }
   const f = e.target.dataset.f;
   if (!f) return;
   if (f === 'cconsent') { S.contact.consent = e.target.checked; return render(); }
   const tgt = S.edit && S.me ? S.me.employee : S.reg;
   if (f === 'consent') S.reg.consent = e.target.checked; else tgt[f] = e.target.value;
+});
+
+$app.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (e.target.id === 'loginPassword') {
+    e.preventDefault();
+    $app.querySelector('[data-act="employee-login"]')?.click();
+  } else if (e.target.id === 'adminPin') {
+    e.preventDefault();
+    $app.querySelector('[data-act="admin-login"]')?.click();
+  }
 });
 
 $app.addEventListener('click', async (e) => {
@@ -322,18 +349,23 @@ $app.addEventListener('click', async (e) => {
   try {
     switch (d.act) {
       case 'retry': S.error = ''; await load(); break;
-      case 'register-open': S.accessMode = 'register'; S.error = ''; render(); break;
+      case 'register-open': S.genericRegistration = false; S.accessMode = 'register'; S.error = ''; render(); break;
       case 'admin-open': S.accessMode = 'admin'; S.error = ''; render(); break;
-      case 'back-access': S.accessMode = null; S.adminPin = ''; S.error = ''; render(); break;
+      case 'back-access': S.accessMode = null; S.genericRegistration = false; S.reg = { name: '', job: '', store: 'Supermercado Maslow', sector: '', shift: '', password: '', passwordConfirm: '', consent: false }; S.adminPin = ''; S.error = ''; render(); break;
       case 'employee-login': {
         if (S.login.role === 'Administrador') {
           await api('/api/admin/login', { pin: S.login.password });
           try { sessionStorage.setItem('pausa_pin', S.login.password); sessionStorage.removeItem('pausa_panel_eid'); sessionStorage.removeItem('pausa_panel_role'); } catch {}
           location.href = 'painel.html'; break;
         }
-        const result = await api('/api/employee/login', S.login);
+        const result = await api('/api/employee/login', { ...S.login, deviceId: DEVICE_ID });
+        if (result.needsRegistration) {
+          S.accessMode = 'register'; S.genericRegistration = true; S.error = '';
+          S.reg = { name: '', job: result.role, store: 'Supermercado Maslow', sector: result.sector, shift: '', password: ({ Caixa: '9187', Vendedor: '9817', Segurança: '2222', Estoque: '3333' }[result.role] || ''), passwordConfirm: '', consent: false };
+          render(); break;
+        }
         try { sessionStorage.setItem('pausa_panel_eid', result.eid); sessionStorage.setItem('pausa_panel_role', result.employee.job); sessionStorage.removeItem('pausa_pin'); } catch {}
-        location.href = 'painel.html'; break;
+        location.href = managementPanelUrl(result.employee); break;
       }
       case 'admin-login': {
         await api('/api/admin/login', { pin: S.adminPin });
@@ -341,16 +373,33 @@ $app.addEventListener('click', async (e) => {
         location.href = 'painel.html'; break;
       }
       case 'logout': ls.del('pausa_eid'); try { sessionStorage.removeItem('pausa_panel_eid'); sessionStorage.removeItem('pausa_panel_role'); } catch {} S.eid = null; S.me = null; S.accessMode = null; render(); break;
+      case 'login-return': ls.del('pausa_eid'); try { sessionStorage.removeItem('pausa_panel_eid'); sessionStorage.removeItem('pausa_panel_role'); sessionStorage.removeItem('pausa_pin'); } catch {} location.href = 'index.html'; break;
       case 'register': {
         const r = S.reg;
-        if (r.password !== r.passwordConfirm) return toast('As senhas não conferem.');
-        const res = await api('/api/register', { name: r.name, password: r.password, job: r.job, store: r.store, sector: r.sector, shift: r.shift, consent: r.consent });
+        if (!S.genericRegistration && r.password !== r.passwordConfirm) return toast('As senhas não conferem.');
+        if (S.genericRegistration && r.password !== ({ Caixa: '9187', Vendedor: '9817', Segurança: '2222', Estoque: '3333' }[r.job] || '')) return toast('A senha não corresponde à função selecionada.');
+        const res = await api('/api/register', { name: r.name, password: r.password, job: r.job, store: 'Supermercado Maslow', sector: r.sector, shift: r.shift, consent: r.consent, genericDevice: S.genericRegistration, deviceId: DEVICE_ID });
         try { sessionStorage.setItem('pausa_panel_eid', res.eid); sessionStorage.setItem('pausa_panel_role', res.employee.job); sessionStorage.removeItem('pausa_pin'); } catch {}
-        location.href = 'painel.html'; break;
+        location.href = managementPanelUrl(res.employee); break;
       }
       case 'shop-buy': {
         const result = await api('/api/shop/buy', { eid: S.eid, productId: d.item });
         toast(`Resgate registrado: ${result.product}. Saldo: ${result.coins} moedas.`); await load(); break;
+      }
+      case 'cart-toggle': S.cartOpen = !S.cartOpen; render(); break;
+      case 'cart-add': {
+        S.cart[d.item] = Math.min(20, (Number(S.cart[d.item]) || 0) + 1); ls.set('maslow_cart_' + S.eid, JSON.stringify(S.cart)); S.cartOpen = true; render(); toast('Adicionado ao carrinho.'); break;
+      }
+      case 'cart-quantity': {
+        const quantity = (Number(S.cart[d.item]) || 0) + Number(d.delta);
+        if (quantity <= 0) delete S.cart[d.item]; else S.cart[d.item] = Math.min(20, quantity);
+        ls.set('maslow_cart_' + S.eid, JSON.stringify(S.cart)); render(); break;
+      }
+      case 'cart-clear': S.cart = {}; ls.set('maslow_cart_' + S.eid, '{}'); render(); break;
+      case 'cart-checkout': {
+        const items = Object.entries(S.cart).map(([productId, quantity]) => ({ productId, quantity: Number(quantity) })).filter(x => x.quantity > 0);
+        const result = await api('/api/shop/checkout', { eid: S.eid, items });
+        S.cart = {}; S.cartOpen = false; ls.set('maslow_cart_' + S.eid, '{}'); toast(`Resgate concluído: ${result.total} moedas. Saldo: ${result.coins} moedas.`); await load(); break;
       }
       case 'edit': S.edit = true; render(); break;
       case 'cancel-edit': S.edit = false; await load(); break;
@@ -396,7 +445,7 @@ $app.addEventListener('click', async (e) => {
       case 'ans': S.answers[d.k] = Number(d.n); render(); break;
       case 'checkin-send': {
         if (S.sleepHours === '' || Number(S.sleepHours) < 0 || Number(S.sleepHours) > 24) return toast('Informe as horas de sono entre 0 e 24.');
-        await api('/api/checkin', { eid: S.eid, answers: S.answers, sleepHours: Number(String(S.sleepHours).replace(',', '.')), feedbackText: S.dailyFeedback });
+        await api('/api/checkin', { eid: S.eid, deviceId: DEVICE_ID, answers: S.answers, sleepHours: Number(String(S.sleepHours).replace(',', '.')), feedbackText: S.dailyFeedback });
         S.justDone = true; S.answers = {}; S.sleepHours = ''; S.dailyFeedback = ''; toast('Check-in enviado. Obrigado.'); await load(); window.scrollTo(0, 0); break;
       }
       case 'health-report': {
@@ -410,10 +459,14 @@ $app.addEventListener('click', async (e) => {
       }
       case 'contact-open': S.contact.open = true; render(); break;
       case 'contact-close': S.contact = { kind: 'saude', contact: '', consent: false, open: false }; render(); break;
-      case 'ck': S.contact.kind = d.k; render(); break;
+      case 'ck': if (d.k === 'psicologia' && S.me.psychSupportSent) return toast('Este perfil já enviou um pedido de apoio psicológico.'); S.contact.kind = d.k; render(); break;
       case 'contact-send': {
+        if (S.contact.kind === 'psicologia' && S.me.psychSupportSent) return toast('Este perfil já enviou um pedido de apoio psicológico.');
+        const wasPsych = S.contact.kind === 'psicologia';
         await api('/api/contact', { eid: S.eid, kind: S.contact.kind, contact: S.contact.contact, consent: S.contact.consent });
         S.contact = { kind: 'saude', contact: '', consent: false, open: false };
+        if (wasPsych) S.me.psychSupportSent = true;
+        else S.me.healthSupportCount = (S.me.healthSupportCount || 0) + 1;
         toast('Pedido enviado. A equipe de saúde vai entrar em contato.'); render(); break;
       }
       case 'vote': {
